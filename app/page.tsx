@@ -1,33 +1,63 @@
 "use client"
-/*function test_function() {
-  console.log("test ESLint");
-}
-
-function testfunction() {
-  console.log("test ESLint");
-}
-
-function TestFunction() {
-  console.log("test ESLint");
-}*/
+import { supabase } from '@/lib/supabase'
+import {useState} from 'react'
 
 export default function Home() {
-  function handleclick() {
-    alert('The message has been sent!');
+  const [message, setMessage] = useState('')
+  const [sender, setSender] = useState('')
+
+  async function handleclick() {
+    if(!sender || !message) {
+      alert('Please enter a sender and message')
+      return
+    }
+    
+      const { data, error } = await supabase
+        .from('message')
+        .insert([
+          { 
+            sender: sender,      
+            message: message     
+          }
+        ])
+    
+    if(error) {
+      alert('Error: ' + error.message)
+      return
+    }
+    alert('Message sent successfully')
+    setSender('')
+    setMessage('')
   }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">
           Click to remind your friend to drink water
         </h1>
-        
+        <div className="flex flex-col gap-6">
+        <input
+          type="text"
+          placeholder="Your name"
+          value={sender}
+          onChange={(e) => setSender(e.target.value)}
+          className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+        />
+        <input
+          type="text"
+          placeholder="Message"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+        />
         <button 
           onClick={handleclick}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg"
+          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
         >
-          Drink one sip of water
+          Tap to remind your friend
         </button>
+        </div>
       </div>
     </div>
   );
