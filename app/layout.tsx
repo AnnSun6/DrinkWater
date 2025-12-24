@@ -18,7 +18,15 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <Toaster />
+        <Toaster 
+          position="top-center"
+          toastOptions={{
+            style: {
+              marginTop: '50vh',  
+              transform: 'translateY(-50%)',
+            },
+          }}
+        />
       </body>
     </html>
   );
