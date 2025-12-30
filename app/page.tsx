@@ -1,11 +1,29 @@
 "use client"
 import { supabase } from '@/lib/supabase'
-import {useState} from 'react'
+import {useState, useEffect} from 'react'
 import toast from 'react-hot-toast'
 
 export default function Home() {
   const [message, setMessage] = useState('')
   const [sender, setSender] = useState('')
+  const [lastMessage, setLastMessage] = useState('')
+
+  async function fetchLastMessage() {
+    const { data } = await supabase
+      .from('message')
+      .select('message')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (data) {
+      setLastMessage(data.message)
+    }
+  }
+
+  useEffect(() => {
+    fetchLastMessage()
+  }, [])
 
   async function handleclick() {
     if(!sender || !message) {
@@ -58,6 +76,16 @@ export default function Home() {
         >
           Tap to remind your friend
         </button>
+        <div className="w-full mt-8">
+          <p className="text-4xl font-bold text-gray-900 mb-8">Your friend remind you to:</p>
+          <input
+            type="text"
+            placeholder="Last message will appear here"
+            value={lastMessage}
+            readOnly
+            className="w-full bg-gray-100 placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2"
+          />
+        </div>
         </div>
       </div>
     </div>
