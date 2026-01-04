@@ -23,7 +23,68 @@ export default function Home() {
 
   useEffect(() => {
     fetchLastMessage()
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    const channel = supabase
+      .channel('messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'message'
+      }, (payload) => {
+        handleNewMessage(payload.new as { sender: string; message: string })
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
+
+  function handleNewMessage(newMessage: { sender: string; message: string }) {
+    setLastMessage(newMessage.message)
+    showNotification(newMessage)
+    playNotificationSound()
+    toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
+  }
+
+  function showNotification(message: { sender: string; message: string }) {
+    if (Notification.permission !== 'granted') return
+
+    const notification = new Notification('Notification from fanfan', {
+      body: `${message.sender}: ${message.message}`,
+      tag: 'water-reminder',
+      icon: '/favicon.ico'
+    })
+
+    notification.onclick = () => {
+      window.focus()
+      notification.close()
+    }
+  }
+
+  function playNotificationSound() {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+    if (!AudioContext) return
+
+    const audioContext = new AudioContext()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    oscillator.frequency.value = 800
+    oscillator.type = 'sine'
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.3)
+  }
 
   async function handleclick() {
     if(!sender || !message) {
