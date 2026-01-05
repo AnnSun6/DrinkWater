@@ -1,12 +1,13 @@
 "use client"
 import { supabase } from '@/lib/supabase'
-import {useState, useEffect} from 'react'
+import {useState, useEffect, useRef} from 'react'
 import toast from 'react-hot-toast'
 
 export default function Home() {
   const [message, setMessage] = useState('')
   const [sender, setSender] = useState('')
   const [lastMessage, setLastMessage] = useState('')
+  const audioContextRef = useRef<AudioContext | null>(null)
 
   async function fetchLastMessage() {
     const { data } = await supabase
@@ -28,6 +29,12 @@ export default function Home() {
       Notification.requestPermission()
     }
 
+    // 初始化 AudioContext（但保持 suspended 状态，等待用户交互）
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      audioContextRef.current = new AudioContextClass()
+    }
+
     const channel = supabase
       .channel('messages')
       .on('postgres_changes', {
@@ -41,6 +48,11 @@ export default function Home() {
 
     return () => {
       supabase.removeChannel(channel)
+      // 清理 AudioContext
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
     }
   }, [])
 
@@ -66,30 +78,47 @@ export default function Home() {
     }
   }
 
-  function playNotificationSound() {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-    if (!AudioContext) return
+  async function playNotificationSound() {
+    if (!audioContextRef.current) return
 
-    const audioContext = new AudioContext()
-    const oscillator = audioContext.createOscillator()
-    const gainNode = audioContext.createGain()
+    try {
+      // 如果 AudioContext 处于 suspended 状态，尝试恢复
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume()
+      }
 
-    oscillator.connect(gainNode)
-    gainNode.connect(audioContext.destination)
+      const oscillator = audioContextRef.current.createOscillator()
+      const gainNode = audioContextRef.current.createGain()
 
-    oscillator.frequency.value = 800
-    oscillator.type = 'sine'
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContextRef.current.destination)
 
-    oscillator.start(audioContext.currentTime)
-    oscillator.stop(audioContext.currentTime + 0.3)
+      oscillator.frequency.value = 800
+      oscillator.type = 'sine'
+      gainNode.gain.setValueAtTime(0.3, audioContextRef.current.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.3)
+
+      oscillator.start(audioContextRef.current.currentTime)
+      oscillator.stop(audioContextRef.current.currentTime + 0.3)
+    } catch (error) {
+      // 静默失败，不影响其他功能
+      console.log('音频播放失败:', error)
+    }
   }
 
   async function handleclick() {
     if(!sender || !message) {
       toast.error('Please enter a sender and message') 
       return
+    }
+    
+    // 在用户点击时解锁 AudioContext（浏览器要求用户交互）
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume()
+      } catch (error) {
+        console.log('AudioContext 解锁失败:', error)
+      }
     }
     
       const { error } = await supabase
