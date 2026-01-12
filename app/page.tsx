@@ -3,27 +3,44 @@ import { supabase } from '@/lib/supabase'
 import {useState, useEffect, useRef} from 'react'
 import toast from 'react-hot-toast'
 
+// 定义消息类型，用于 TypeScript 类型检查.类型安全：确保数据结构一致，避免运行时错误
+// 为什么需要这个类型？
+type Message = {
+  id: string          // 消息唯一标识（UUID）
+  sender: string     // 发送者名字
+  message: string    // 消息内容
+  created_at: string // 创建时间（ISO 8601 格式）
+}
+
 export default function Home() {
   const [message, setMessage] = useState('')
   const [sender, setSender] = useState('')
-  const [lastMessage, setLastMessage] = useState('')
+  // 修改：从单个字符串改为消息数组,可以存储多条消息的完整信息
+  const [messages, setMessages] = useState<Message[]>([])
   const audioContextRef = useRef<AudioContext | null>(null)
 
-  async function fetchLastMessage() {
-    const { data } = await supabase
-      .from('message')
-      .select('message')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
 
-    if (data) {
-      setLastMessage(data.message)
+  async function fetchMessages() {
+    const { data, error } = await supabase
+      .from('message')
+      .select('*')  // 获取所有字段：id, sender, message, created_at
+      .order('created_at', { ascending: false })  // 按时间倒序,最新的在前
+      .limit(5)    // 只取最近5条
+
+    // 错误处理：如果查询失败，显示错误提示
+    if (error) {
+      console.error('查询消息失败:', error)
+      toast.error('加载消息失败')
+      return
     }
+
+    // data 可能是数组或 null，用 || [] 确保是数组,如果 data 是 null，使用空数组，避免后续 .map() 报错
+    setMessages(data || [])
   }
 
   useEffect(() => {
-    fetchLastMessage()
+
+    fetchMessages()
 
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
@@ -42,7 +59,8 @@ export default function Home() {
         schema: 'public',
         table: 'message'
       }, (payload) => {
-        handleNewMessage(payload.new as { sender: string; message: string })
+        // 类型断言从 { sender, message } 改为 Message,因为payload.new 包含完整消息信息（id, sender, message, created_at）。使用 Message 类型更准确，符合类型安全原则
+        handleNewMessage(payload.new as Message)
       })
       .subscribe()
 
@@ -56,11 +74,16 @@ export default function Home() {
     }
   }, [])
 
-  function handleNewMessage(newMessage: { sender: string; message: string }) {
-    setLastMessage(newMessage.message)
+
+  //处理新消息,当 Supabase Realtime 监听到新消息插入时调用
+  function handleNewMessage(newMessage: Message) {
+    // 显示通知（浏览器通知 + Toast + 音频）
     showNotification(newMessage)
     playNotificationSound()
     toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
+    
+    // 重新获取消息列表,重新查询确保数据一致性
+    fetchMessages()
   }
 
   function showNotification(message: { sender: string; message: string }) {
@@ -106,13 +129,31 @@ export default function Home() {
     }
   }
 
+  function formatTime(timestamp: string): string {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+
+    if (diffMins < 60) {
+      return `${diffMins} mins ago`
+    }
+
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
   async function handleclick() {
     if(!sender || !message) {
       toast.error('Please enter a sender and message') 
       return
     }
     
-    // 在用户点击时解锁 AudioContext（浏览器要求用户交互）
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       try {
         await audioContextRef.current.resume()
@@ -167,14 +208,31 @@ export default function Home() {
           Tap to remind your friend
         </button>
         <div className="w-full mt-8">
-          <p className="text-4xl font-bold text-gray-900 mb-8">Your friend remind you to:</p>
-          <input
-            type="text"
-            placeholder="Last message will appear here"
-            value={lastMessage}
-            readOnly
-            className="w-full bg-gray-100 placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2"
-          />
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Message History</h2>
+          
+          {messages.length === 0 ? (
+            <p className="text-gray-500 text-sm">暂无消息</p>
+          ) : (
+            <div className="space-y-3">
+              {messages.map((msg) => (
+                <div 
+                  key={msg.id}
+                  className="bg-white border border-slate-200 rounded-md p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{msg.sender}</span>
+                      <span className="text-sm text-gray-500">reminds you</span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {formatTime(msg.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-gray-700">{msg.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         </div>
       </div>
