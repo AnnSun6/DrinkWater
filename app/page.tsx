@@ -39,6 +39,11 @@ export default function Home() {
   }
 
   useEffect(() => {
+    // 从 localStorage 恢复身份选择
+    const savedSender = localStorage.getItem('my_name')
+    if (savedSender === 'Ann' || savedSender === 'Sid') {
+      setSender(savedSender)
+    }
 
     fetchMessages()
 
@@ -148,9 +153,17 @@ export default function Home() {
     })
   }
 
+  function handleSenderChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const newSender = e.target.value
+    setSender(newSender)
+    localStorage.setItem('my_name', newSender)
+  }
+
+  const friendName = sender === 'Ann' ? 'Sid' : sender === 'Sid' ? 'Ann' : ''
+
   async function handleclick() {
     if(!sender || !message) {
-      toast.error('Please enter a sender and message') 
+      toast.error('Please select a sender and enter a message') 
       return
     }
     
@@ -187,13 +200,20 @@ export default function Home() {
           Click to remind your friend to drink water
         </h1>
         <div className="flex flex-col gap-6">
-        <input
-          type="text"
-          placeholder="Your name"
+        <select
           value={sender}
-          onChange={(e) => setSender(e.target.value)}
-          className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-        />
+          onChange={handleSenderChange}
+          className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+        >
+          <option value="">Please choose who you are</option>
+          <option value="Ann">Ann</option>
+          <option value="Sid">Sid</option>
+        </select>
+        {friendName && (
+          <p className="text-sm text-gray-500 -mt-4">
+            You want to remind：{friendName}
+          </p>
+        )}
         <input
           type="text"
           placeholder="Message"
