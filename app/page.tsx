@@ -1,6 +1,6 @@
 "use client"
 import { supabase } from '@/lib/supabase'
-import {useState, useEffect, useRef} from 'react'
+import {useState, useEffect, useRef, useCallback} from 'react'
 import toast from 'react-hot-toast'
 
 // 定义消息类型，用于 TypeScript 类型检查.类型安全：确保数据结构一致，避免运行时错误
@@ -12,6 +12,13 @@ type Message = {
   created_at: string // 创建时间（ISO 8601 格式）
 }
 
+// 根据当前身份获取对方身份
+function getReceiverName(sender: string): string | null {
+  if (sender === 'Ann') return 'Sid'
+  if (sender === 'Sid') return 'Ann'
+  return null
+}
+
 export default function Home() {
   const [message, setMessage] = useState('')
   const [sender, setSender] = useState('')
@@ -20,10 +27,27 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null)
 
 
-  async function fetchMessages() {
+  // 查询消息函数：根据当前身份筛选"收到的消息"
+
+  const fetchMessages = useCallback(async () => {
+    // 如果未选择身份，清空消息列表
+    if (!sender) {
+      setMessages([])
+      return
+    }
+
+  
+    const receiver = getReceiverName(sender)
+    if (!receiver) {
+      setMessages([])
+      return
+    }
+
+    // 只查询对方发送给我的消息
     const { data, error } = await supabase
       .from('message')
       .select('*')  // 获取所有字段：id, sender, message, created_at
+      .eq('sender', receiver)  // 筛选条件：只查询 sender === receiver 的消息
       .order('created_at', { ascending: false })  // 按时间倒序,最新的在前
       .limit(5)    // 只取最近5条
 
@@ -36,7 +60,7 @@ export default function Home() {
 
     // data 可能是数组或 null，用 || [] 确保是数组,如果 data 是 null，使用空数组，避免后续 .map() 报错
     setMessages(data || [])
-  }
+  }, [sender])  // sender身份变化时，函数会自动更新
 
   useEffect(() => {
     // 从 localStorage 恢复身份选择
@@ -45,7 +69,9 @@ export default function Home() {
       setSender(savedSender)
     }
 
-    fetchMessages()
+
+    // 新的 useEffect 会监听 sender 变化并自动调用 fetchMessages
+
 
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
@@ -79,16 +105,34 @@ export default function Home() {
     }
   }, [])
 
+  // 监听身份变化，自动重新查询消息
+  useEffect(() => {
+    if (sender) {
+      // 如果已选择身份，查询对应的消息
+      fetchMessages()
+    } else {
+      // 如果未选择身份，清空消息列表
+      setMessages([])
+    }
+  }, [sender, fetchMessages])  // sender 和 fetchMessages，当身份变化时自动重新查询
 
   //处理新消息,当 Supabase Realtime 监听到新消息插入时调用
   function handleNewMessage(newMessage: Message) {
-    // 显示通知（浏览器通知 + Toast + 音频）
-    showNotification(newMessage)
-    playNotificationSound()
-    toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
+
+    if (!sender) return
+
+    const receiver = getReceiverName(sender)
     
-    // 重新获取消息列表,重新查询确保数据一致性
-    fetchMessages()
+    // 只有对方发给我的消息才显示通知
+    if (receiver && newMessage.sender === receiver) {
+      // 显示通知（浏览器通知 + Toast + 音频）
+      showNotification(newMessage)
+      playNotificationSound()
+      toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
+      
+      // 重新获取消息列表,重新查询确保数据一致性
+      fetchMessages()
+    }
   }
 
   function showNotification(message: { sender: string; message: string }) {
@@ -228,7 +272,7 @@ export default function Home() {
           Tap to remind your friend
         </button>
         <div className="w-full mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Message History</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Received Messages</h2>
           
           {messages.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无消息</p>
