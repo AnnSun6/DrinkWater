@@ -8,6 +8,7 @@ type Message = {
   sender: string
   message: string
   created_at: string
+  is_read?: boolean
 }
 
 // 根据当前身份获取对方身份
@@ -40,11 +41,7 @@ export default function Home() {
       .eq('sender', receiver)
       .order('created_at', { ascending: false })
       .limit(5)
-    if (error) {
-      console.error('查询消息失败:', error)
-      toast.error('加载消息失败')
-      return
-    }
+    if (error) return
     setMessages(data || [])
   }, [sender])
 
@@ -60,11 +57,7 @@ export default function Home() {
         .eq('sender', sender)
         .order('created_at', { ascending: false })
         .limit(5)
-      if (error) {
-        console.error('查询消息失败:', error)
-        toast.error('加载消息失败')
-        return
-      }
+      if (error) return
       setSentMessages(data || [])
   },[sender])
 
@@ -92,6 +85,13 @@ export default function Home() {
         table: 'message'
       }, (payload) => {
         handleNewMessage(payload.new as Message)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'message'
+      }, (payload) => {
+        handleMessageUpdate(payload.new as Message)
       })
       .subscribe()
 
@@ -131,6 +131,17 @@ export default function Home() {
     }
   }
 
+  function handleMessageUpdate(updatedMessage: Message) {
+    if (!sender) return
+    const receiver = getReceiverName(sender)
+
+    if (updatedMessage.sender === sender) {
+      setSentMessages(prev => prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg))
+    } else if (receiver && updatedMessage.sender === receiver) {
+      setMessages(prev => prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg))
+    }
+  }
+
   function showNotification(message: { sender: string; message: string }) {
     if (Notification.permission !== 'granted') return
 
@@ -167,9 +178,7 @@ export default function Home() {
 
       oscillator.start(audioContextRef.current.currentTime)
       oscillator.stop(audioContextRef.current.currentTime + 0.3)
-    } catch (error) {
-      console.log('音频播放失败:', error)
-    }
+    } catch (error) {}
   }
 
   function formatTime(timestamp: string): string {
@@ -205,12 +214,8 @@ export default function Home() {
       return
     }
     
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-      try {
-        await audioContextRef.current.resume()
-      } catch (error) {
-        console.log('AudioContext 解锁失败:', error)
-      }
+    if (audioContextRef.current?.state === 'suspended') {
+      await audioContextRef.current.resume().catch(() => {})
     }
     
       const { error } = await supabase
@@ -229,6 +234,19 @@ export default function Home() {
     toast.success('Message sent successfully!')
     fetchSentMessages()
     setMessage('')
+  }
+
+  async function handleMarkAsRead(messageId: string) {
+    await supabase
+      .from('message')
+      .update({ is_read: true })
+      .eq('id', messageId)
+    
+    setMessages(prevMessages => 
+      prevMessages.map(msg => 
+        msg.id === messageId ? { ...msg, is_read: true } : msg
+      )
+    )
   }
 
   return (
@@ -286,7 +304,19 @@ export default function Home() {
                       {formatTime(msg.created_at)}
                     </span>
                   </div>
-                  <p className="text-gray-700">{msg.message}</p>
+                  <div className="flex items-end justify-between gap-2">
+                    <p className="text-gray-700 flex-1">{msg.message}</p>
+                    {!msg.is_read ? (
+                      <button
+                        onClick={() => handleMarkAsRead(msg.id)}
+                        className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
+                      >
+                        got it
+                      </button>
+                    ) : (
+                      <span className="text-xs text-green-600 font-medium">✓ read</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -313,7 +343,14 @@ export default function Home() {
                       {formatTime(msg.created_at)}
                     </span>
                   </div>
-                  <p className="text-gray-700">{msg.message}</p>
+                  <div className="flex items-end justify-between gap-2">
+                    <p className="text-gray-700 flex-1">{msg.message}</p>
+                    {msg.is_read ? (
+                      <span className="text-xs text-green-600 font-medium">✓ read</span>
+                    ) : (
+                      <span className="text-xs text-gray-400 font-medium">⏳ unread</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
