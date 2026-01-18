@@ -23,6 +23,7 @@ export default function Home() {
   const [sender, setSender] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [sentMessages, setSentMessages] = useState<Message[]>([])
+  const [totalMl, setTotalMl] = useState(0)
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchMessages = useCallback(async () => {
@@ -66,6 +67,11 @@ export default function Home() {
     const savedSender = localStorage.getItem('my_name')
     if (savedSender === 'Ann' || savedSender === 'Sid') {
       setSender(savedSender)
+    }
+
+    const savedTotal = localStorage.getItem('total_water_ml')
+    if (savedTotal) {
+      setTotalMl(parseInt(savedTotal) || 0)
     }
 
     if ('Notification' in window && Notification.permission === 'default') {
@@ -208,6 +214,13 @@ export default function Home() {
 
   const friendName = sender === 'Ann' ? 'Sid' : sender === 'Sid' ? 'Ann' : ''
 
+  function handleDrink() {
+    const newTotal = totalMl + 50
+    setTotalMl(newTotal)
+    localStorage.setItem('total_water_ml', newTotal.toString())
+    toast.success('Recorded 50ml!')
+  }
+
   async function handleclick() {
     if(!sender || !message) {
       toast.error('Please select a sender and enter a message') 
@@ -283,6 +296,20 @@ export default function Home() {
         >
           Tap to remind your friend
         </button>
+        <div className="w-full mt-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Water Intake</h2>
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+            <p className="text-lg font-semibold text-blue-900">
+              Total: {totalMl} ml
+            </p>
+          </div>
+          <button
+            onClick={handleDrink}
+            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          >
+            Drink Water (+50ml)
+          </button>
+        </div>
         <div className="w-full mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Received Messages</h2>
           
