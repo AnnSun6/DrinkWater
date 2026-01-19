@@ -316,33 +316,32 @@ export default function Home() {
           {messages.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无消息</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {messages.map((msg) => (
                 <div 
                   key={msg.id}
-                  className="bg-white border border-slate-200 rounded-md p-4 shadow-sm"
+                  className="bg-white border border-slate-200 rounded-md px-4 py-2 shadow-sm"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{msg.sender}</span>
-                      <span className="text-sm text-gray-500">reminds you</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900">{msg.sender}:</span>
+                      <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                     </div>
-                    <span className="text-xs text-gray-400">
-                      {formatTime(msg.created_at)}
-                    </span>
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <p className="text-gray-700 flex-1">{msg.message}</p>
-                    {!msg.is_read ? (
-                      <button
-                        onClick={() => handleMarkAsRead(msg.id)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
-                      >
-                        got it
-                      </button>
-                    ) : (
-                      <span className="text-xs text-green-600 font-medium">✓ read</span>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {formatTime(msg.created_at)}
+                      </span>
+                      {!msg.is_read ? (
+                        <button
+                          onClick={() => handleMarkAsRead(msg.id)}
+                          className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
+                        >
+                          got it
+                        </button>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -355,28 +354,27 @@ export default function Home() {
           {sentMessages.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无消息</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {sentMessages.map((msg) => (
                 <div 
                   key={msg.id}
-                  className="bg-white border border-slate-200 rounded-md p-4 shadow-sm"
+                  className="bg-white border border-slate-200 rounded-md px-4 py-2 shadow-sm"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">You</span>
-                      <span className="text-sm text-gray-500">remind {friendName}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900">You:</span>
+                      <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                     </div>
-                    <span className="text-xs text-gray-400">
-                      {formatTime(msg.created_at)}
-                    </span>
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <p className="text-gray-700 flex-1">{msg.message}</p>
-                    {msg.is_read ? (
-                      <span className="text-xs text-green-600 font-medium">✓ read</span>
-                    ) : (
-                      <span className="text-xs text-gray-400 font-medium">⏳ unread</span>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {formatTime(msg.created_at)}
+                      </span>
+                      {msg.is_read ? (
+                        <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                      ) : (
+                        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">⏳ unread</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
