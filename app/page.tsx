@@ -23,7 +23,8 @@ export default function Home() {
   const [sender, setSender] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [sentMessages, setSentMessages] = useState<Message[]>([])
-  const [totalMl, setTotalMl] = useState(0)
+  const [todayTotalMl, setTodayTotalMl] = useState(0)
+  const [cupSizeMl, setCupSizeMl] = useState(250)
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchMessages = useCallback(async () => {
@@ -69,9 +70,20 @@ export default function Home() {
       setSender(savedSender)
     }
 
-    const savedTotal = localStorage.getItem('total_water_ml')
-    if (savedTotal) {
-      setTotalMl(parseInt(savedTotal) || 0)
+    // 加载今日总量
+    const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
+    const savedToday = localStorage.getItem(`water_${today}`)
+    if (savedToday) {
+      setTodayTotalMl(parseInt(savedToday) || 0)
+    }
+
+    // 加载配置：一杯的毫升数
+    const savedCupSize = localStorage.getItem('cup_size_ml')
+    if (savedCupSize) {
+      const cupSize = parseInt(savedCupSize)
+      if (!isNaN(cupSize) && cupSize > 0) {
+        setCupSizeMl(cupSize)
+      }
     }
 
     if ('Notification' in window && Notification.permission === 'default') {
@@ -214,11 +226,24 @@ export default function Home() {
 
   const friendName = sender === 'Ann' ? 'Sid' : sender === 'Sid' ? 'Ann' : ''
 
-  function handleDrink() {
-    const newTotal = totalMl + 50
-    setTotalMl(newTotal)
-    localStorage.setItem('total_water_ml', newTotal.toString())
-    toast.success('Recorded 50ml!')
+  function handleDrink(amountMl: number) {
+    if (!sender) {
+      toast.error('Please select your identity first')
+      return
+    }
+    const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
+    const newTotal = todayTotalMl + amountMl
+    setTodayTotalMl(newTotal)
+    localStorage.setItem(`water_${today}`, newTotal.toString())
+    toast.success(`Recorded ${amountMl}ml!`)
+  }
+
+  function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const newSize = parseInt(e.target.value) || 250
+    if (newSize > 0 && newSize <= 1000) {
+      setCupSizeMl(newSize)
+      localStorage.setItem('cup_size_ml', newSize.toString())
+    }
   }
 
   async function handleclick() {
@@ -298,17 +323,51 @@ export default function Home() {
         </button>
         <div className="w-full mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Water Intake</h2>
+          
+          {/* 显示今日总量 */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
             <p className="text-lg font-semibold text-blue-900">
-              Total: {totalMl} ml
+              Today's Total: {todayTotalMl} ml
             </p>
           </div>
-          <button
-            onClick={handleDrink}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-          >
-            Drink Water (+50ml)
-          </button>
+          
+          {/* 配置和按钮 */}
+          <div className="flex gap-2 items-center justify-center flex-wrap">
+            {/* 配置区域：一杯的毫升数 */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-700 whitespace-nowrap">
+                Cup Size (ml):
+              </label>
+              <input
+                type="number"
+                min="50"
+                max="1000"
+                value={cupSizeMl}
+                onChange={handleCupSizeChange}
+                className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+              />
+            </div>
+            
+            {/* 三个按钮：一口、半杯、一杯 */}
+            <button
+              onClick={() => handleDrink(50)}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+            >
+              Sip (+50ml)
+            </button>
+            <button
+              onClick={() => handleDrink(Math.floor(cupSizeMl / 2))}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+            >
+              Half Cup (+{Math.floor(cupSizeMl / 2)}ml)
+            </button>
+            <button
+              onClick={() => handleDrink(cupSizeMl)}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+            >
+              Full Cup (+{cupSizeMl}ml)
+            </button>
+          </div>
         </div>
         <div className="w-full mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Received Messages</h2>
