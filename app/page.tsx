@@ -359,44 +359,44 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* 导航栏   固定在顶部 */}
-      <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-10">
-        <div className="max-w-2xl mx-auto px-4">
-          <div className="flex gap-4">
+      {/* 导航栏 */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex space-x-1 py-3">
             <button
               onClick={() => setActiveTab('reminder')}
-              className={`py-4 px-6 font-medium transition-colors ${
+              className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
                 activeTab === 'reminder'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               remind and record
             </button>
             <button
               onClick={() => setActiveTab('log')}
-              className={`py-4 px-6 font-medium transition-colors ${
+              className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
                 activeTab === 'log'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               your water intake history
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
-      {/* 内容区域 - 添加padding-top以避免被导航栏遮挡 */}
-      <div className="pt-16 flex-1">
-        {activeTab === 'reminder' ? (
-          /* Tab 1: 提醒和记录 */
-          <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-            <div className="text-center max-w-2xl w-full px-4">
-              <h1 className="text-4xl font-bold text-gray-900 mb-8">
-                Click to remind your friend to drink water
-              </h1>
-              <div className="flex flex-col gap-6">
+      {/* 内容区域 */}
+      <div className="flex-1">
+        {activeTab === 'reminder' && (
+          <div className="p-4 space-y-6">
+            <div className="flex items-center justify-center">
+              <div className="text-center max-w-2xl w-full">
+                <h1 className="text-4xl font-bold text-gray-900 mb-8">
+                  Click to remind your friend to drink water
+                </h1>
+                <div className="flex flex-col gap-6">
         <select
           value={sender}
           onChange={handleSenderChange}
@@ -543,12 +543,28 @@ export default function Home() {
             </div>
           )}
         </div>
+                </div>
               </div>
             </div>
           </div>
-        ) : (
-          /* Tab 2: 喝水Log */
+        )}
+
+        {activeTab === 'log' && (
           <div className="max-w-2xl mx-auto px-4 py-8">
+            {/* 顶部统计信息 */}
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Current User</p>
+                  <p className="text-2xl font-bold text-blue-600">{sender || 'Not selected'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Today's Total</p>
+                  <p className="text-2xl font-bold text-cyan-600">{todayTotalMl} ml</p>
+                </div>
+              </div>
+            </div>
+
             <h1 className="text-3xl font-bold text-gray-900 mb-6">your water intake history</h1>
             
             {drinkLogs.length === 0 ? (
