@@ -11,6 +11,20 @@ type Message = {
   is_read?: boolean
 }
 
+type DrinkLog = {
+  id: string
+  user_name: string
+  amount_ml: number
+  created_at: string
+}
+
+type UserSettings = {
+  id: string
+  user_name: string
+  cup_size_ml: number
+  updated_at: string
+}
+
 // 根据当前身份获取对方身份
 function getReceiverName(sender: string): string | null {
   if (sender === 'Ann') return 'Sid'
@@ -63,27 +77,48 @@ export default function Home() {
       setSentMessages(data || [])
   },[sender])
 
+  const fetchTodayTotalMl = useCallback(async () => {
+    if (!sender) {
+      setTodayTotalMl(0)
+      return
+    }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayStart = today.toISOString()
+    
+    const { data } = await supabase
+      .from('drink_logs')
+      .select('amount_ml')
+      .eq('user_name', sender)
+      .gte('created_at', todayStart)
+    
+    const total = data?.reduce((sum, log) => sum + log.amount_ml, 0) || 0
+    setTodayTotalMl(total)
+  }, [sender])
+
+  const fetchUserSettings = useCallback(async () => {
+    if (!sender) {
+      setCupSizeMl(250)
+      return
+    }
+    
+    const { data } = await supabase
+      .from('user_settings')
+      .select('cup_size_ml')
+      .eq('user_name', sender)
+      .single()
+    
+    if (data?.cup_size_ml) {
+      setCupSizeMl(data.cup_size_ml)
+    }
+  }, [sender])
+
 
   useEffect(() => {
     const savedSender = localStorage.getItem('my_name')
     if (savedSender === 'Ann' || savedSender === 'Sid') {
       setSender(savedSender)
-    }
-
-    // 加载今日总量
-    const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
-    const savedToday = localStorage.getItem(`water_${today}`)
-    if (savedToday) {
-      setTodayTotalMl(parseInt(savedToday) || 0)
-    }
-
-    // 加载配置：一杯的毫升数
-    const savedCupSize = localStorage.getItem('cup_size_ml')
-    if (savedCupSize) {
-      const cupSize = parseInt(savedCupSize)
-      if (!isNaN(cupSize) && cupSize > 0) {
-        setCupSizeMl(cupSize)
-      }
     }
 
     if ('Notification' in window && Notification.permission === 'default') {
@@ -126,11 +161,15 @@ export default function Home() {
     if (sender) {
       fetchMessages()
       fetchSentMessages()
+      fetchTodayTotalMl()
+      fetchUserSettings()
     } else {
       setMessages([])
       setSentMessages([])
+      setTodayTotalMl(0)
+      setCupSizeMl(250)
     }
-  }, [sender, fetchMessages, fetchSentMessages])
+  }, [sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings])
 
   function handleNewMessage(newMessage: Message) {
     if (!sender) return
@@ -226,24 +265,34 @@ export default function Home() {
 
   const friendName = sender === 'Ann' ? 'Sid' : sender === 'Sid' ? 'Ann' : ''
 
-  function handleDrink(amountMl: number) {
-    if (!sender) {
-      toast.error('Please select your identity first')
-      return
-    }
-    const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
-    const newTotal = todayTotalMl + amountMl
-    setTodayTotalMl(newTotal)
-    localStorage.setItem(`water_${today}`, newTotal.toString())
+  async function handleDrink(amountMl: number) {
+    if (!sender) return
+    
+    await supabase
+      .from('drink_logs')
+      .insert([{ user_name: sender, amount_ml: amountMl }])
+    
+    await fetchTodayTotalMl()
     toast.success(`Recorded ${amountMl}ml!`)
   }
 
-  function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!sender) return
+    
     const newSize = parseInt(e.target.value) || 250
-    if (newSize > 0 && newSize <= 1000) {
-      setCupSizeMl(newSize)
-      localStorage.setItem('cup_size_ml', newSize.toString())
-    }
+    if (newSize <= 0 || newSize > 1000) return
+    
+    await supabase
+      .from('user_settings')
+      .upsert({
+        user_name: sender,
+        cup_size_ml: newSize,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_name'
+      })
+    
+    setCupSizeMl(newSize)
   }
 
   async function handleclick() {
