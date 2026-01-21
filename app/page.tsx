@@ -39,6 +39,8 @@ export default function Home() {
   const [sentMessages, setSentMessages] = useState<Message[]>([])
   const [todayTotalMl, setTodayTotalMl] = useState(0)
   const [cupSizeMl, setCupSizeMl] = useState(250)
+  const [activeTab, setActiveTab] = useState<'reminder' | 'log'>('reminder')
+  const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([])
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchMessages = useCallback(async () => {
@@ -114,6 +116,22 @@ export default function Home() {
     }
   }, [sender])
 
+  const fetchDrinkLogs = useCallback(async () => {
+    if (!sender) {
+      setDrinkLogs([])
+      return
+    }
+    
+    const { data } = await supabase
+      .from('drink_logs')
+      .select('*')
+      .eq('user_name', sender)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    
+    setDrinkLogs(data || [])
+  }, [sender])
+
 
   useEffect(() => {
     const savedSender = localStorage.getItem('my_name')
@@ -163,13 +181,15 @@ export default function Home() {
       fetchSentMessages()
       fetchTodayTotalMl()
       fetchUserSettings()
+      fetchDrinkLogs()
     } else {
       setMessages([])
       setSentMessages([])
       setTodayTotalMl(0)
       setCupSizeMl(250)
+      setDrinkLogs([])
     }
-  }, [sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings])
+  }, [sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs])
 
   function handleNewMessage(newMessage: Message) {
     if (!sender) return
@@ -273,6 +293,7 @@ export default function Home() {
       .insert([{ user_name: sender, amount_ml: amountMl }])
     
     await fetchTodayTotalMl()
+    await fetchDrinkLogs()
     toast.success(`Recorded ${amountMl}ml!`)
   }
 
@@ -337,12 +358,45 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">
-          Click to remind your friend to drink water
-        </h1>
-        <div className="flex flex-col gap-6">
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* 导航栏   固定在顶部 */}
+      <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-10">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('reminder')}
+              className={`py-4 px-6 font-medium transition-colors ${
+                activeTab === 'reminder'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              remind and record
+            </button>
+            <button
+              onClick={() => setActiveTab('log')}
+              className={`py-4 px-6 font-medium transition-colors ${
+                activeTab === 'log'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              your water intake history
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 内容区域 - 添加padding-top以避免被导航栏遮挡 */}
+      <div className="pt-16 flex-1">
+        {activeTab === 'reminder' ? (
+          /* Tab 1: 提醒和记录 */
+          <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+            <div className="text-center max-w-2xl w-full px-4">
+              <h1 className="text-4xl font-bold text-gray-900 mb-8">
+                Click to remind your friend to drink water
+              </h1>
+              <div className="flex flex-col gap-6">
         <select
           value={sender}
           onChange={handleSenderChange}
@@ -489,7 +543,39 @@ export default function Home() {
             </div>
           )}
         </div>
-        </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Tab 2: 喝水Log */
+          <div className="max-w-2xl mx-auto px-4 py-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">your water intake history</h1>
+            
+            {drinkLogs.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">no water intake history</p>
+            ) : (
+              <div className="space-y-3">
+                {drinkLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="bg-white border border-slate-200 rounded-md px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-lg font-semibold text-blue-600">
+                          {log.amount_ml} ml
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {formatTime(log.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
