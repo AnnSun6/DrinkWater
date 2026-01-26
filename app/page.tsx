@@ -74,48 +74,26 @@ export default function Home() {
   const [savingNickname, setSavingNickname] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
 
-  // 获取用户档案（邮箱和昵称）
   const fetchUserProfile = useCallback(async () => {
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (sessionError || !session?.user?.email) {
-        router.push('/login')
-        return
-      }
-
-      const email = session.user.email
-      setUserEmail(email)
-
-      // 查询用户档案获取昵称
-      // 使用 maybeSingle() 而不是 single()，这样记录不存在时返回 null 而不是错误
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('nickname')
-        .eq('email', email)
-        .maybeSingle()
-
-      if (profileError) {
-        // 只有在真正的错误时才记录（如表不存在、权限问题等）
-        // PGRST116 错误（记录不存在）会被 maybeSingle() 处理为 null，不会进入这里
-        console.error('Profile fetch error:', profileError)
-        setUserNickname(email.split('@')[0])
-      } else if (profile?.nickname) {
-        // 如果找到档案，使用昵称
-        setUserNickname(profile.nickname)
-        setProfileNickname(profile.nickname)
-      } else {
-        // 如果记录不存在（maybeSingle 返回 null），使用邮箱前缀作为默认昵称
-        // 这是正常情况，用户首次登录时可能还没有创建档案
-        const defaultNickname = email.split('@')[0]
-        setUserNickname(defaultNickname)
-        setProfileNickname(defaultNickname)
-      }
-
-    } catch (error) {
-      console.error('Error fetching user profile:', error)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
       router.push('/login')
+      return
     }
+
+    const email = session.user.email
+    setUserEmail(email)
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('nickname')
+      .eq('email', email)
+      .maybeSingle()
+
+    const nickname = profile?.nickname || email.split('@')[0]
+    setUserNickname(nickname)
+    setProfileNickname(nickname)
   }, [router])
 
   const fetchMessages = useCallback(async () => {
