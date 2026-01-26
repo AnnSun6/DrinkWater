@@ -1,6 +1,7 @@
 "use client"
 import { supabase } from '@/lib/supabase'
 import {useState, useEffect, useRef, useCallback} from 'react'
+import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 type Message = {
@@ -25,6 +26,31 @@ type UserSettings = {
   updated_at: string
 }
 
+// 消息发送者名称组件（显示昵称）
+function MessageSenderName({ senderEmail }: { senderEmail: string }) {
+  const [nickname, setNickname] = useState<string>(senderEmail.split('@')[0])
+  
+  useEffect(() => {
+    const fetchNickname = async () => {
+      // 使用 maybeSingle() 而不是 single()，这样记录不存在时返回 null 而不是错误
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('nickname')
+        .eq('email', senderEmail)
+        .maybeSingle()
+      
+      if (profile?.nickname) {
+        setNickname(profile.nickname)
+      }
+      // 如果没有找到档案，保持默认值（邮箱前缀）
+    }
+    
+    fetchNickname()
+  }, [senderEmail])
+  
+  return <span className="text-sm font-semibold text-gray-900">{nickname}:</span>
+}
+
 // 根据当前身份获取对方身份
 function getReceiverName(sender: string): string | null {
   if (sender === 'Ann') return 'Sid'
@@ -33,15 +59,42 @@ function getReceiverName(sender: string): string | null {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [message, setMessage] = useState('')
   const [sender, setSender] = useState('')
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userNickname, setUserNickname] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sentMessages, setSentMessages] = useState<Message[]>([])
   const [todayTotalMl, setTodayTotalMl] = useState(0)
   const [cupSizeMl, setCupSizeMl] = useState(250)
-  const [activeTab, setActiveTab] = useState<'reminder' | 'log'>('reminder')
+  const [activeTab, setActiveTab] = useState<'reminder' | 'log' | 'profile'>('reminder')
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([])
+  const [profileNickname, setProfileNickname] = useState<string>('')
+  const [savingNickname, setSavingNickname] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
+
+  const fetchUserProfile = useCallback(async () => {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
+      router.push('/login')
+      return
+    }
+
+    const email = session.user.email
+    setUserEmail(email)
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('nickname')
+      .eq('email', email)
+      .maybeSingle()
+
+    const nickname = profile?.nickname || email.split('@')[0]
+    setUserNickname(nickname)
+    setProfileNickname(nickname)
+  }, [router])
 
   const fetchMessages = useCallback(async () => {
     if (!sender) {
@@ -134,20 +187,41 @@ export default function Home() {
 
 
   useEffect(() => {
-    const savedSender = localStorage.getItem('my_name')
-    if (savedSender === 'Ann' || savedSender === 'Sid') {
-      setSender(savedSender)
+    // 检查认证状态并获取用户档案
+    const checkAuthAndFetchProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/login')
+        return
+      }
+      await fetchUserProfile()
     }
 
+    checkAuthAndFetchProfile()
+
+    // 监听认证状态变化
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!session) {
+          router.push('/login')
+        } else {
+          await fetchUserProfile()
+        }
+      }
+    )
+
+    // 请求通知权限
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
 
+    // 初始化音频上下文
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
     if (AudioContextClass) {
       audioContextRef.current = new AudioContextClass()
     }
 
+    // 订阅消息变化
     const channel = supabase
       .channel('messages')
       .on('postgres_changes', {
@@ -167,13 +241,14 @@ export default function Home() {
       .subscribe()
 
     return () => {
+      subscription.unsubscribe()
       supabase.removeChannel(channel)
       if (audioContextRef.current) {
         audioContextRef.current.close()
         audioContextRef.current = null
       }
     }
-  }, [])
+  }, [router, fetchUserProfile])
 
   useEffect(() => {
     if (sender) {
@@ -357,32 +432,72 @@ export default function Home() {
     )
   }
 
+   async function handleSaveNickname(e: React.FormEvent) {
+    e.preventDefault()
+    
+    if (!profileNickname.trim() || !userEmail) return
+
+    setSavingNickname(true)
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        email: userEmail,
+        nickname: profileNickname.trim(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'email'
+      })
+
+    setSavingNickname(false)
+
+    if (error) {
+      toast.error('Failed to save nickname')
+      return
+    }
+
+    setUserNickname(profileNickname.trim())
+    toast.success('Nickname saved')
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* 导航栏 */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex space-x-1 py-3">
-            <button
-              onClick={() => setActiveTab('reminder')}
-              className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                activeTab === 'reminder'
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              remind and record
-            </button>
-            <button
-              onClick={() => setActiveTab('log')}
-              className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                activeTab === 'log'
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              your water intake history
-            </button>
+          <div className="flex items-center justify-between py-3">
+            <div className="flex space-x-1 flex-1">
+              <button
+                onClick={() => setActiveTab('reminder')}
+                className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                  activeTab === 'reminder'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                remind and record
+              </button>
+              <button
+                onClick={() => setActiveTab('log')}
+                className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                  activeTab === 'log'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                your water intake history
+              </button>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                  activeTab === 'profile'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                profile
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -484,9 +599,9 @@ export default function Home() {
                   key={msg.id}
                   className="bg-white border border-slate-200 rounded-md px-4 py-2 shadow-sm"
                 >
-                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-gray-900">{msg.sender}:</span>
+                      <MessageSenderName senderEmail={msg.sender} />
                       <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -556,7 +671,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Current User</p>
-                  <p className="text-2xl font-bold text-blue-600">{sender || 'Not selected'}</p>
+                  <p className="text-2xl font-bold text-blue-600">{userNickname || 'Loading...'}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Today's Total</p>
@@ -590,6 +705,49 @@ export default function Home() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="max-w-2xl mx-auto px-4 py-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
+            
+            <form onSubmit={handleSaveNickname} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={userEmail || ''}
+                  disabled
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nickname
+                </label>
+                <input
+                  type="text"
+                  value={profileNickname}
+                  onChange={(e) => setProfileNickname(e.target.value)}
+                  placeholder="Enter your nickname"
+                  required
+                  disabled={savingNickname}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingNickname}
+                className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors font-medium"
+              >
+                {savingNickname ? 'Saving...' : 'Save'}
+              </button>
+            </form>
           </div>
         )}
       </div>
