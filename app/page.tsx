@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 type Message = {
   id: string
   sender: string
+  receiver?: string
   message: string
   created_at: string
   is_read?: boolean
@@ -32,7 +33,6 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
   
   useEffect(() => {
     const fetchNickname = async () => {
-      // 使用 maybeSingle() 而不是 single()，这样记录不存在时返回 null 而不是错误
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('nickname')
@@ -42,7 +42,6 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
       if (profile?.nickname) {
         setNickname(profile.nickname)
       }
-      // 如果没有找到档案，保持默认值（邮箱前缀）
     }
     
     fetchNickname()
@@ -51,11 +50,20 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
   return <span className="text-sm font-semibold text-gray-900">{nickname}:</span>
 }
 
-// 根据当前身份获取对方身份
+
 function getReceiverName(sender: string): string | null {
   if (sender === 'Ann') return 'Sid'
   if (sender === 'Sid') return 'Ann'
   return null
+}
+
+async function getReceiverEmail(currentEmail: string): Promise<string | null> {
+  const { data: profiles } = await supabase
+    .from('user_profiles')
+    .select('email')
+    .neq('email', currentEmail)
+  
+  return profiles?.[0]?.email || null
 }
 
 export default function Home() {
@@ -97,40 +105,39 @@ export default function Home() {
   }, [router])
 
   const fetchMessages = useCallback(async () => {
-    if (!sender) {
-      setMessages([])
-      return
-    } 
-    const receiver = getReceiverName(sender)
-    if (!receiver) {
+    if (!userEmail) {
       setMessages([])
       return
     }
+    
     const { data, error } = await supabase
       .from('message')
       .select('*')
-      .eq('sender', receiver)
+      .eq('receiver', userEmail)
       .order('created_at', { ascending: false })
       .limit(5)
+    
     if (error) return
     setMessages(data || [])
-  }, [sender])
+  }, [userEmail])
 
 
   const fetchSentMessages = useCallback(async() => {
-      if (!sender) {
-        setSentMessages([])
-        return
-      }
-      const { data, error } = await supabase
-        .from('message')
-        .select('*')
-        .eq('sender', sender)
-        .order('created_at', { ascending: false })
-        .limit(5)
-      if (error) return
-      setSentMessages(data || [])
-  },[sender])
+    if (!userEmail) {
+      setSentMessages([])
+      return
+    }
+    
+    const { data, error } = await supabase
+      .from('message')
+      .select('*')
+      .eq('sender', userEmail)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    
+    if (error) return
+    setSentMessages(data || [])
+  }, [userEmail])
 
   const fetchTodayTotalMl = useCallback(async () => {
     if (!sender) {
@@ -187,7 +194,6 @@ export default function Home() {
 
 
   useEffect(() => {
-    // 检查认证状态并获取用户档案
     const checkAuthAndFetchProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
@@ -199,7 +205,6 @@ export default function Home() {
 
     checkAuthAndFetchProfile()
 
-    // 监听认证状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!session) {
@@ -210,18 +215,15 @@ export default function Home() {
       }
     )
 
-    // 请求通知权限
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
 
-    // 初始化音频上下文
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
     if (AudioContextClass) {
       audioContextRef.current = new AudioContextClass()
     }
 
-    // 订阅消息变化
     const channel = supabase
       .channel('messages')
       .on('postgres_changes', {
@@ -251,46 +253,51 @@ export default function Home() {
   }, [router, fetchUserProfile])
 
   useEffect(() => {
-    if (sender) {
+    if (userEmail) {
       fetchMessages()
       fetchSentMessages()
+    } else {
+      setMessages([])
+      setSentMessages([])
+    }
+    
+    if (sender) {
       fetchTodayTotalMl()
       fetchUserSettings()
       fetchDrinkLogs()
     } else {
-      setMessages([])
-      setSentMessages([])
       setTodayTotalMl(0)
       setCupSizeMl(250)
       setDrinkLogs([])
     }
-  }, [sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs])
+  }, [userEmail, sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs])
 
   function handleNewMessage(newMessage: Message) {
-    if (!sender) return
+    if (!userEmail) return
 
-    const receiver = getReceiverName(sender)
-    
-    if (newMessage.sender === sender) {
-      fetchSentMessages()
-    }
-    
-    if (receiver && newMessage.sender === receiver) {
+    if (newMessage.receiver === userEmail) {
       showNotification(newMessage)
       playNotificationSound()
       toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
       fetchMessages()
     }
+    
+    if (newMessage.sender === userEmail) {
+      fetchSentMessages()
+    }
   }
 
   function handleMessageUpdate(updatedMessage: Message) {
-    if (!sender) return
-    const receiver = getReceiverName(sender)
+    if (!userEmail) return
 
-    if (updatedMessage.sender === sender) {
-      setSentMessages(prev => prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg))
-    } else if (receiver && updatedMessage.sender === receiver) {
-      setMessages(prev => prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg))
+    if (updatedMessage.sender === userEmail) {
+      setSentMessages(prev => prev.map(msg => 
+        msg.id === updatedMessage.id ? updatedMessage : msg
+      ))
+    } else if (updatedMessage.receiver === userEmail) {
+      setMessages(prev => prev.map(msg => 
+        msg.id === updatedMessage.id ? updatedMessage : msg
+      ))
     }
   }
 
@@ -312,25 +319,23 @@ export default function Home() {
   async function playNotificationSound() {
     if (!audioContextRef.current) return
 
-    try {
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume()
-      }
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume()
+    }
 
-      const oscillator = audioContextRef.current.createOscillator()
-      const gainNode = audioContextRef.current.createGain()
+    const oscillator = audioContextRef.current.createOscillator()
+    const gainNode = audioContextRef.current.createGain()
 
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContextRef.current.destination)
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContextRef.current.destination)
 
-      oscillator.frequency.value = 800
-      oscillator.type = 'sine'
-      gainNode.gain.setValueAtTime(0.3, audioContextRef.current.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.3)
+    oscillator.frequency.value = 800
+    oscillator.type = 'sine'
+    gainNode.gain.setValueAtTime(0.3, audioContextRef.current.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.3)
 
-      oscillator.start(audioContextRef.current.currentTime)
-      oscillator.stop(audioContextRef.current.currentTime + 0.3)
-    } catch (error) {}
+    oscillator.start(audioContextRef.current.currentTime)
+    oscillator.stop(audioContextRef.current.currentTime + 0.3)
   }
 
   function formatTime(timestamp: string): string {
@@ -392,23 +397,30 @@ export default function Home() {
   }
 
   async function handleclick() {
-    if(!sender || !message) {
-      toast.error('Please select a sender and enter a message') 
+    if (!userEmail || !message) {
+      toast.error('Please enter a message') 
+      return
+    }
+    
+    const receiverEmail = await getReceiverEmail(userEmail)
+    if (!receiverEmail) {
+      toast.error('No receiver found')
       return
     }
     
     if (audioContextRef.current?.state === 'suspended') {
-      await audioContextRef.current.resume().catch(() => {})
+      await audioContextRef.current.resume()
     }
     
-      const { error } = await supabase
-        .from('message')
-        .insert([
-          { 
-            sender: sender,      
-            message: message     
-          }
-        ])
+    const { error } = await supabase
+      .from('message')
+      .insert([
+        { 
+          sender: userEmail,
+          receiver: receiverEmail,
+          message: message     
+        }
+      ])
     
     if(error) {
       toast.error('Error: ' + error.message)
