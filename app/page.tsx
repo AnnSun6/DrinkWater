@@ -51,12 +51,6 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
 }
 
 
-function getReceiverName(sender: string): string | null {
-  if (sender === 'Ann') return 'Sid'
-  if (sender === 'Sid') return 'Ann'
-  return null
-}
-
 async function getReceiverEmail(currentEmail: string): Promise<string | null> {
   const { data: profiles } = await supabase
     .from('user_profiles')
@@ -69,7 +63,6 @@ async function getReceiverEmail(currentEmail: string): Promise<string | null> {
 export default function Home() {
   const router = useRouter()
   const [message, setMessage] = useState('')
-  const [sender, setSender] = useState('')
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userNickname, setUserNickname] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -80,6 +73,7 @@ export default function Home() {
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([])
   const [profileNickname, setProfileNickname] = useState<string>('')
   const [savingNickname, setSavingNickname] = useState(false)
+  const [receiverNickname, setReceiverNickname] = useState<string>('')
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchUserProfile = useCallback(async () => {
@@ -103,6 +97,24 @@ export default function Home() {
     setUserNickname(nickname)
     setProfileNickname(nickname)
   }, [router])
+
+  const fetchReceiverNickname = useCallback(async () => {
+    if (!userEmail) {
+      setReceiverNickname('')
+      return
+    }
+    
+    const receiverEmail = await getReceiverEmail(userEmail)
+    if (receiverEmail) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('nickname')
+        .eq('email', receiverEmail)
+        .maybeSingle()
+      
+      setReceiverNickname(profile?.nickname || receiverEmail.split('@')[0])
+    }
+  }, [userEmail])
 
   const fetchMessages = useCallback(async () => {
     if (!userEmail) {
@@ -140,7 +152,7 @@ export default function Home() {
   }, [userEmail])
 
   const fetchTodayTotalMl = useCallback(async () => {
-    if (!sender) {
+    if (!userEmail) {
       setTodayTotalMl(0)
       return
     }
@@ -152,15 +164,15 @@ export default function Home() {
     const { data } = await supabase
       .from('drink_logs')
       .select('amount_ml')
-      .eq('user_name', sender)
+      .eq('user_name', userEmail)
       .gte('created_at', todayStart)
     
     const total = data?.reduce((sum, log) => sum + log.amount_ml, 0) || 0
     setTodayTotalMl(total)
-  }, [sender])
+  }, [userEmail])
 
   const fetchUserSettings = useCallback(async () => {
-    if (!sender) {
+    if (!userEmail) {
       setCupSizeMl(250)
       return
     }
@@ -168,16 +180,16 @@ export default function Home() {
     const { data } = await supabase
       .from('user_settings')
       .select('cup_size_ml')
-      .eq('user_name', sender)
+      .eq('user_name', userEmail)
       .single()
     
     if (data?.cup_size_ml) {
       setCupSizeMl(data.cup_size_ml)
     }
-  }, [sender])
+  }, [userEmail])
 
   const fetchDrinkLogs = useCallback(async () => {
-    if (!sender) {
+    if (!userEmail) {
       setDrinkLogs([])
       return
     }
@@ -185,12 +197,12 @@ export default function Home() {
     const { data } = await supabase
       .from('drink_logs')
       .select('*')
-      .eq('user_name', sender)
+      .eq('user_name', userEmail)
       .order('created_at', { ascending: false })
       .limit(50)
     
     setDrinkLogs(data || [])
-  }, [sender])
+  }, [userEmail])
 
 
   useEffect(() => {
@@ -256,21 +268,19 @@ export default function Home() {
     if (userEmail) {
       fetchMessages()
       fetchSentMessages()
-    } else {
-      setMessages([])
-      setSentMessages([])
-    }
-    
-    if (sender) {
       fetchTodayTotalMl()
       fetchUserSettings()
       fetchDrinkLogs()
+      fetchReceiverNickname()
     } else {
+      setMessages([])
+      setSentMessages([])
       setTodayTotalMl(0)
       setCupSizeMl(250)
       setDrinkLogs([])
+      setReceiverNickname('')
     }
-  }, [userEmail, sender, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs])
+  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchReceiverNickname])
 
   function handleNewMessage(newMessage: Message) {
     if (!userEmail) return
@@ -357,20 +367,12 @@ export default function Home() {
     })
   }
 
-  function handleSenderChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const newSender = e.target.value
-    setSender(newSender)
-    localStorage.setItem('my_name', newSender)
-  }
-
-  const friendName = sender === 'Ann' ? 'Sid' : sender === 'Sid' ? 'Ann' : ''
-
   async function handleDrink(amountMl: number) {
-    if (!sender) return
+    if (!userEmail) return
     
     await supabase
       .from('drink_logs')
-      .insert([{ user_name: sender, amount_ml: amountMl }])
+      .insert([{ user_name: userEmail, amount_ml: amountMl }])
     
     await fetchTodayTotalMl()
     await fetchDrinkLogs()
@@ -378,7 +380,7 @@ export default function Home() {
   }
 
   async function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!sender) return
+    if (!userEmail) return
     
     const newSize = parseInt(e.target.value) || 250
     if (newSize <= 0 || newSize > 1000) return
@@ -386,7 +388,7 @@ export default function Home() {
     await supabase
       .from('user_settings')
       .upsert({
-        user_name: sender,
+        user_name: userEmail,
         cup_size_ml: newSize,
         updated_at: new Date().toISOString()
       }, {
@@ -524,19 +526,17 @@ export default function Home() {
                   Click to remind your friend to drink water
                 </h1>
                 <div className="flex flex-col gap-6">
-        <select
-          value={sender}
-          onChange={handleSenderChange}
-          className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-        >
-          <option value="">Please choose who you are</option>
-          <option value="Ann">Ann</option>
-          <option value="Sid">Sid</option>
-        </select>
-        {friendName && (
-          <p className="text-sm text-gray-500 -mt-4">
-            You want to remind：{friendName}
-          </p>
+        {userNickname && (
+          <div className="text-center">
+            <p className="text-sm text-gray-600 mb-2">
+              You are: <span className="font-semibold text-gray-900">{userNickname}</span>
+            </p>
+            {receiverNickname && (
+              <p className="text-sm text-gray-500">
+                You want to remind: <span className="font-semibold text-gray-700">{receiverNickname}</span>
+              </p>
+            )}
+          </div>
         )}
         <input
           type="text"
