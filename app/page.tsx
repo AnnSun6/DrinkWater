@@ -74,6 +74,8 @@ export default function Home() {
   const [profileNickname, setProfileNickname] = useState<string>('')
   const [savingNickname, setSavingNickname] = useState(false)
   const [receiverNickname, setReceiverNickname] = useState<string>('')
+  const [selectedReceiverEmail, setSelectedReceiverEmail] = useState<string>('')
+  const [availableUsers, setAvailableUsers] = useState<Array<{email: string, nickname: string}>>([])
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchUserProfile = useCallback(async () => {
@@ -98,23 +100,44 @@ export default function Home() {
     setProfileNickname(nickname)
   }, [router])
 
-  const fetchReceiverNickname = useCallback(async () => {
+  const fetchAvailableUsers = useCallback(async () => {
     if (!userEmail) {
+      setAvailableUsers([])
+      setSelectedReceiverEmail('')
+      return
+    }
+    
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('email, nickname')
+      .neq('email', userEmail)
+      .order('nickname')
+    
+    if (profiles && profiles.length > 0) {
+      setAvailableUsers(profiles)
+      if (!selectedReceiverEmail || !profiles.find(p => p.email === selectedReceiverEmail)) {
+        setSelectedReceiverEmail(profiles[0].email)
+      }
+    } else {
+      setAvailableUsers([])
+      setSelectedReceiverEmail('')
+    }
+  }, [userEmail, selectedReceiverEmail])
+
+  const fetchReceiverNickname = useCallback(async () => {
+    if (!selectedReceiverEmail) {
       setReceiverNickname('')
       return
     }
     
-    const receiverEmail = await getReceiverEmail(userEmail)
-    if (receiverEmail) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('nickname')
-        .eq('email', receiverEmail)
-        .maybeSingle()
-      
-      setReceiverNickname(profile?.nickname || receiverEmail.split('@')[0])
-    }
-  }, [userEmail])
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('nickname')
+      .eq('email', selectedReceiverEmail)
+      .maybeSingle()
+    
+    setReceiverNickname(profile?.nickname || selectedReceiverEmail.split('@')[0])
+  }, [selectedReceiverEmail])
 
   const fetchMessages = useCallback(async () => {
     if (!userEmail) {
@@ -122,14 +145,13 @@ export default function Home() {
       return
     }
     
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('message')
       .select('*')
       .eq('receiver', userEmail)
       .order('created_at', { ascending: false })
       .limit(5)
     
-    if (error) return
     setMessages(data || [])
   }, [userEmail])
 
@@ -140,14 +162,13 @@ export default function Home() {
       return
     }
     
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('message')
       .select('*')
       .eq('sender', userEmail)
       .order('created_at', { ascending: false })
       .limit(5)
     
-    if (error) return
     setSentMessages(data || [])
   }, [userEmail])
 
@@ -271,7 +292,7 @@ export default function Home() {
       fetchTodayTotalMl()
       fetchUserSettings()
       fetchDrinkLogs()
-      fetchReceiverNickname()
+      fetchAvailableUsers()
     } else {
       setMessages([])
       setSentMessages([])
@@ -279,8 +300,18 @@ export default function Home() {
       setCupSizeMl(250)
       setDrinkLogs([])
       setReceiverNickname('')
+      setAvailableUsers([])
+      setSelectedReceiverEmail('')
     }
-  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchReceiverNickname])
+  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchAvailableUsers])
+
+  useEffect(() => {
+    if (selectedReceiverEmail) {
+      fetchReceiverNickname()
+    } else {
+      setReceiverNickname('')
+    }
+  }, [selectedReceiverEmail, fetchReceiverNickname])
 
   function handleNewMessage(newMessage: Message) {
     if (!userEmail) return
@@ -404,9 +435,8 @@ export default function Home() {
       return
     }
     
-    const receiverEmail = await getReceiverEmail(userEmail)
-    if (!receiverEmail) {
-      toast.error('No receiver found')
+    if (!selectedReceiverEmail) {
+      toast.error('Please select a receiver')
       return
     }
     
@@ -419,13 +449,13 @@ export default function Home() {
       .insert([
         { 
           sender: userEmail,
-          receiver: receiverEmail,
+          receiver: selectedReceiverEmail,
           message: message     
         }
       ])
     
-    if(error) {
-      toast.error('Error: ' + error.message)
+    if (error) {
+      toast.error('Failed to send message')
       return
     }
     toast.success('Message sent successfully!')
@@ -527,12 +557,40 @@ export default function Home() {
                 </h1>
                 <div className="flex flex-col gap-6">
         {userNickname && (
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">
+          <div className="text-center mb-2">
+            <p className="text-sm text-gray-600">
               You are: <span className="font-semibold text-gray-900">{userNickname}</span>
             </p>
-            {receiverNickname && (
-              <p className="text-sm text-gray-500">
+          </div>
+        )}
+        
+        {availableUsers.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select a friend to remind:
+            </label>
+            <select
+              value={selectedReceiverEmail}
+              onChange={(e) => setSelectedReceiverEmail(e.target.value)}
+              className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+            >
+              {availableUsers.length === 1 ? (
+                <option value={availableUsers[0].email}>
+                  {availableUsers[0].nickname}
+                </option>
+              ) : (
+                <>
+                  <option value="">Select a friend</option>
+                  {availableUsers.map(user => (
+                    <option key={user.email} value={user.email}>
+                      {user.nickname}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            {selectedReceiverEmail && receiverNickname && (
+              <p className="text-sm text-gray-500 mt-2">
                 You want to remind: <span className="font-semibold text-gray-700">{receiverNickname}</span>
               </p>
             )}
