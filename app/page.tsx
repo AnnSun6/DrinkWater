@@ -76,6 +76,7 @@ export default function Home() {
   const [receiverNickname, setReceiverNickname] = useState<string>('')
   const [selectedReceiverEmail, setSelectedReceiverEmail] = useState<string>('')
   const [availableUsers, setAvailableUsers] = useState<Array<{email: string, nickname: string}>>([])
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchUserProfile = useCallback(async () => {
@@ -95,9 +96,25 @@ export default function Home() {
       .eq('email', email)
       .maybeSingle()
 
-    const nickname = profile?.nickname || email.split('@')[0]
-    setUserNickname(nickname)
-    setProfileNickname(nickname)
+    // 如果用户档案不存在，自动创建一个默认档案（使用邮箱前缀作为昵称）
+    if (!profile) {
+      const defaultNickname = email.split('@')[0]
+      await supabase
+        .from('user_profiles')
+        .upsert({
+          email: email,
+          nickname: defaultNickname,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'email'
+        })
+      setUserNickname(defaultNickname)
+      setProfileNickname(defaultNickname)
+    } else {
+      const nickname = profile.nickname
+      setUserNickname(nickname)
+      setProfileNickname(nickname)
+    }
   }, [router])
 
   const fetchAvailableUsers = useCallback(async () => {
@@ -504,6 +521,15 @@ export default function Home() {
     toast.success('Nickname saved')
   }
 
+  async function handleAddFriend(friendEmail: string, friendNickname: string) {
+    toast.success(`Added ${friendNickname} as friend!`)
+  }
+
+  const filteredUsers = availableUsers.filter(user => 
+    user.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* 导航栏 */}
@@ -818,6 +844,42 @@ export default function Home() {
                 {savingNickname ? 'Saving...' : 'Save'}
               </button>
             </form>
+
+            <div className="mt-12 pt-8 border-t border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Add Friends</h2>
+              
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search users by name or email..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {filteredUsers.length > 0 && (
+                <div className="space-y-3">
+                  {filteredUsers.map(user => (
+                    <div
+                      key={user.email}
+                      className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">{user.nickname}</p>
+                        <p className="text-sm text-gray-500">{user.email}</p>
+                      </div>
+                      <button
+                        onClick={() => handleAddFriend(user.email, user.nickname)}
+                        className="ml-4 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        Add Friend
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
