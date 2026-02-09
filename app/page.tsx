@@ -50,6 +50,28 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
   return <span className="text-sm font-semibold text-gray-900">{nickname}:</span>
 }
 
+function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
+  const [nickname, setNickname] = useState<string>(receiverEmail.split('@')[0])
+  
+  useEffect(() => {
+    const fetchNickname = async () => {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('nickname')
+        .eq('email', receiverEmail)
+        .maybeSingle()
+      
+      if (profile?.nickname) {
+        setNickname(profile.nickname)
+      }
+    }
+    
+    fetchNickname()
+  }, [receiverEmail])
+  
+  return <span className="text-sm font-semibold text-gray-900">{nickname}</span>
+}
+
 
 async function getReceiverEmail(currentEmail: string): Promise<string | null> {
   const { data: profiles } = await supabase
@@ -735,7 +757,9 @@ export default function Home() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-gray-900">You:</span>
+                      <span className="text-sm font-semibold text-gray-900">You →</span>
+                      <MessageReceiverName receiverEmail={msg.receiver || ''} />
+                      <span className="text-sm text-gray-700">:</span>
                       <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
