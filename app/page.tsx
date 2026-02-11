@@ -597,189 +597,189 @@ export default function Home() {
       {/* 内容区域 */}
       <div className="flex-1">
         {activeTab === 'reminder' && (
-          <div className="p-4 space-y-6">
-            <div className="flex items-center justify-center">
-              <div className="text-center max-w-2xl w-full">
-                <h1 className="text-4xl font-bold text-gray-900 mb-8">
-                  Click to remind your friend to drink water
-                </h1>
-                <div className="flex flex-col gap-6">
-        {userNickname && (
-          <div className="text-center mb-2">
-            <p className="text-sm text-gray-600">
-              You are: <span className="font-semibold text-gray-900">{userNickname}</span>
-            </p>
-          </div>
-        )}
-        
-        {availableUsers.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select a friend to remind:
-            </label>
-            <select
-              value={selectedReceiverEmail}
-              onChange={(e) => setSelectedReceiverEmail(e.target.value)}
-              className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-            >
-              {availableUsers.length === 1 ? (
-                <option value={availableUsers[0].email}>
-                  {availableUsers[0].nickname}
-                </option>
-              ) : (
-                <>
-                  <option value="">Select a friend</option>
-                  {availableUsers.map(user => (
-                    <option key={user.email} value={user.email}>
-                      {user.nickname}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            {selectedReceiverEmail && receiverNickname && (
-              <p className="text-sm text-gray-500 mt-2">
-                You want to remind: <span className="font-semibold text-gray-700">{receiverNickname}</span>
+          <div className="max-w-4xl mx-auto p-4 space-y-6">
+            {/* remind friend card */}
+            {userNickname && (
+              <p className="text-sm text-gray-500 text-center">
+                Logged in as <span className="font-semibold text-gray-800">{userNickname}</span>
               </p>
             )}
-          </div>
-        )}
-        <input
-          type="text"
-          placeholder="Message"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-        />
-        <button 
-          onClick={handleclick}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-        >
-          Tap to remind your friend
-        </button>
-        <div className="w-full mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Water Intake</h2>
-          
-          {/* 显示今日总量 */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-            <p className="text-lg font-semibold text-blue-900">
-              Today's Total: {todayTotalMl} ml
-            </p>
-          </div>
-          
-          {/* 配置和按钮 */}
-          <div className="flex gap-2 items-center justify-center flex-wrap">
-            {/* 配置区域：一杯的毫升数 */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-700 whitespace-nowrap">
-                Cup Size (ml):
-              </label>
-              <input
-                type="number"
-                min="50"
-                max="1000"
-                value={cupSizeMl}
-                onChange={handleCupSizeChange}
-                className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-              />
-            </div>
-            
-            {/* 三个按钮：一口、半杯、一杯 */}
-            <button
-              onClick={() => handleDrink(50)}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-            >
-              Sip (+50ml)
-            </button>
-            <button
-              onClick={() => handleDrink(Math.floor(cupSizeMl / 2))}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-            >
-              Half Cup (+{Math.floor(cupSizeMl / 2)}ml)
-            </button>
-            <button
-              onClick={() => handleDrink(cupSizeMl)}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-            >
-              Full Cup (+{cupSizeMl}ml)
-            </button>
-          </div>
-        </div>
-        <div className="w-full mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Received Messages</h2>
-          
-          {messages.length === 0 ? (
-            <p className="text-gray-500 text-sm">暂无消息</p>
-          ) : (
-            <div className="space-y-2">
-              {messages.map((msg) => (
-                <div 
-                  key={msg.id}
-                  className="bg-white border border-slate-200 rounded-md px-4 py-2 shadow-sm"
-                >
-                    <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <MessageSenderName senderEmail={msg.sender} />
-                      <p className="text-sm text-gray-700 truncate">{msg.message}</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {formatTime(msg.created_at)}
-                      </span>
-                      {!msg.is_read ? (
-                        <button
-                          onClick={() => handleMarkAsRead(msg.id)}
-                          className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
-                        >
-                          got it
-                        </button>
+
+            {/* Two-column card grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Card 1: Remind a Friend */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Remind a Friend</h2>
+
+                {availableUsers.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select a friend:
+                    </label>
+                    <select
+                      value={selectedReceiverEmail}
+                      onChange={(e) => setSelectedReceiverEmail(e.target.value)}
+                      className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+                    >
+                      {availableUsers.length === 1 ? (
+                        <option value={availableUsers[0].email}>
+                          {availableUsers[0].nickname}
+                        </option>
                       ) : (
-                        <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                        <>
+                          <option value="">Select a friend</option>
+                          {availableUsers.map(user => (
+                            <option key={user.email} value={user.email}>
+                              {user.nickname}
+                            </option>
+                          ))}
+                        </>
                       )}
-                    </div>
+                    </select>
+                    {selectedReceiverEmail && receiverNickname && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Reminding: <span className="font-semibold text-gray-700">{receiverNickname}</span>
+                      </p>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="w-full mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Messages You Sent</h2>
-          
-          {sentMessages.length === 0 ? (
-            <p className="text-gray-500 text-sm">暂无消息</p>
-          ) : (
-            <div className="space-y-2">
-              {sentMessages.map((msg) => (
-                <div 
-                  key={msg.id}
-                  className="bg-white border border-slate-200 rounded-md px-4 py-2 shadow-sm"
+                )}
+
+                <input
+                  type="text"
+                  placeholder="Type your message..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow mb-4"
+                />
+
+                <button
+                  onClick={handleclick}
+                  className="mt-auto w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-gray-900">You →</span>
-                      <MessageReceiverName receiverEmail={msg.receiver || ''} />
-                      <span className="text-sm text-gray-700">:</span>
-                      <p className="text-sm text-gray-700 truncate">{msg.message}</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {formatTime(msg.created_at)}
-                      </span>
-                      {msg.is_read ? (
-                        <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
-                      ) : (
-                        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">⏳ unread</span>
-                      )}
-                    </div>
-                  </div>
+                  Tap to remind your friend
+                </button>
+              </div>
+
+              {/*Water Intake card*/}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Water Intake</h2>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                  <p className="text-lg font-semibold text-blue-900">
+                    Today&apos;s Total: {todayTotalMl} ml
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <label className="text-sm text-gray-700 whitespace-nowrap">Cup Size (ml):</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="1000"
+                    value={cupSizeMl}
+                    onChange={handleCupSizeChange}
+                    className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+                  />
+                </div>
+
+                <div className="mt-auto grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => handleDrink(50)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm"
+                  >
+                    Sip (+50ml)
+                  </button>
+                  <button
+                    onClick={() => handleDrink(Math.floor(cupSizeMl / 2))}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm"
+                  >
+                    Half (+{Math.floor(cupSizeMl / 2)}ml)
+                  </button>
+                  <button
+                    onClick={() => handleDrink(cupSizeMl)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm"
+                  >
+                    Full (+{cupSizeMl}ml)
+                  </button>
                 </div>
               </div>
+            </div>
+
+            {/* Received Messages */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Received Messages</h2>
+
+              {messages.length === 0 ? (
+                <p className="text-gray-500 text-sm">暂无消息</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="bg-gray-50 border border-slate-200 rounded-md px-4 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <MessageSenderName senderEmail={msg.sender} />
+                          <p className="text-sm text-gray-700 truncate">{msg.message}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            {formatTime(msg.created_at)}
+                          </span>
+                          {!msg.is_read ? (
+                            <button
+                              onClick={() => handleMarkAsRead(msg.id)}
+                              className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
+                            >
+                              got it
+                            </button>
+                          ) : (
+                            <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sent Messages */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Messages You Sent</h2>
+
+              {sentMessages.length === 0 ? (
+                <p className="text-gray-500 text-sm">暂无消息</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {sentMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="bg-gray-50 border border-slate-200 rounded-md px-4 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-gray-900">You →</span>
+                          <MessageReceiverName receiverEmail={msg.receiver || ''} />
+                          <span className="text-sm text-gray-700">:</span>
+                          <p className="text-sm text-gray-700 truncate">{msg.message}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            {formatTime(msg.created_at)}
+                          </span>
+                          {msg.is_read ? (
+                            <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                          ) : (
+                            <span className="text-xs text-gray-400 font-medium whitespace-nowrap">⏳ unread</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
