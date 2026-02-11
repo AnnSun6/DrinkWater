@@ -10,15 +10,27 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      const { data, error } = await supabase.auth.getSession()
-
-      if (error) {
-        setError(error.message)
-        setTimeout(() => router.push('/login'), 2000)
-        return
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        
+        if (error) {
+          setError(error.message)
+          setTimeout(() => router.push('/login'), 2000)
+          return
+        }
       }
 
+      const { data } = await supabase.auth.getSession()
+
       if (data.session) {
+        window.history.replaceState({}, document.title, window.location.pathname)
         router.push('/')
       } else {
         setError('please try again')

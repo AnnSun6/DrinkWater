@@ -51,9 +51,14 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
 }
 
 function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
-  const [nickname, setNickname] = useState<string>(receiverEmail.split('@')[0])
+  const [nickname, setNickname] = useState<string>(receiverEmail ? receiverEmail.split('@')[0] : '')
   
   useEffect(() => {
+    if (!receiverEmail) {
+      setNickname('')
+      return
+    }
+    
     const fetchNickname = async () => {
       const { data: profile } = await supabase
         .from('user_profiles')
@@ -68,6 +73,8 @@ function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
     
     fetchNickname()
   }, [receiverEmail])
+  
+  if (!nickname) return null
   
   return <span className="text-sm font-semibold text-gray-900">{nickname}</span>
 }
