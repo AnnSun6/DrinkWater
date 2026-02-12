@@ -271,7 +271,6 @@ export default function Home() {
     setDrinkLogs(data || [])
   }, [userEmail])
 
-
   useEffect(() => {
     const checkAuthAndFetchProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -551,7 +550,48 @@ export default function Home() {
   }
 
   async function handleAddFriend(friendEmail: string, friendNickname: string) {
-    toast.success(`Added ${friendNickname} as friend!`)
+    if (!userEmail) return
+
+    const { data: existing } = await supabase
+      .from('friend_requests')
+      .select('id, status')
+      .eq('sender_email', userEmail)
+      .eq('receiver_email', friendEmail)
+      .maybeSingle()
+
+    if (existing) {
+      if (existing.status === 'pending') {
+        toast.error(`Already sent a request to ${friendNickname}`)
+        return
+      }
+      if (existing.status === 'accepted') {
+        toast.error(`${friendNickname} is already your friend!`)
+        return
+      }
+      if (existing.status === 'rejected') {
+        await supabase
+          .from('friend_requests')
+          .update({ status: 'pending', updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+        toast.success(`Re-sent friend request to ${friendNickname}!`)
+        return
+      }
+    }
+
+    const { error } = await supabase
+      .from('friend_requests')
+      .insert([{
+        sender_email: userEmail,
+        receiver_email: friendEmail,
+        status: 'pending'
+      }])
+
+    if (error) {
+      toast.error('Failed to send friend request')
+      return
+    }
+
+    toast.success(`Friend request sent to ${friendNickname}!`)
   }
 
   const filteredUsers = availableUsers.filter(user => 
