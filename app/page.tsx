@@ -552,28 +552,27 @@ export default function Home() {
   async function handleAddFriend(friendEmail: string, friendNickname: string) {
     if (!userEmail) return
 
-    const { data: existing } = await supabase
+    const { data: req } = await supabase
       .from('friend_requests')
-      .select('id, status')
-      .eq('sender_email', userEmail)
-      .eq('receiver_email', friendEmail)
+      .select('id, status, sender_email')
+      .or(`and(sender_email.eq.${userEmail},receiver_email.eq.${friendEmail}),and(sender_email.eq.${friendEmail},receiver_email.eq.${userEmail})`)
       .maybeSingle()
 
-    if (existing) {
-      if (existing.status === 'pending') {
-        toast.error(`Already sent a request to ${friendNickname}`)
-        return
-      }
-      if (existing.status === 'accepted') {
+    if (req) {
+      if (req.status === 'accepted') {
         toast.error(`${friendNickname} is already your friend!`)
         return
       }
-      if (existing.status === 'rejected') {
+      if (req.status === 'pending' && req.sender_email === userEmail) {
+        toast.error(`Already sent a request to ${friendNickname}`)
+        return
+      }
+      if (req.status === 'pending' && req.sender_email === friendEmail) {
         await supabase
           .from('friend_requests')
-          .update({ status: 'pending', updated_at: new Date().toISOString() })
-          .eq('id', existing.id)
-        toast.success(`Re-sent friend request to ${friendNickname}!`)
+          .update({ status: 'accepted', updated_at: new Date().toISOString() })
+          .eq('id', req.id)
+        toast.success(`You and ${friendNickname} are now friends!`)
         return
       }
     }
