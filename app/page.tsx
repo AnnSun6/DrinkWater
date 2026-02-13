@@ -153,11 +153,34 @@ export default function Home() {
       setSelectedReceiverEmail('')
       return
     }
-    
+
+    const { data: sent } = await supabase
+      .from('friend_requests')
+      .select('receiver_email')
+      .eq('sender_email', userEmail)
+      .eq('status', 'accepted')
+
+    const { data: received } = await supabase
+      .from('friend_requests')
+      .select('sender_email')
+      .eq('receiver_email', userEmail)
+      .eq('status', 'accepted')
+
+    const friendEmails = [
+      ...(sent?.map(r => r.receiver_email) || []),
+      ...(received?.map(r => r.sender_email) || [])
+    ]
+
+    if (friendEmails.length === 0) {
+      setAvailableUsers([])
+      setSelectedReceiverEmail('')
+      return
+    }
+
     const { data: profiles } = await supabase
       .from('user_profiles')
       .select('email, nickname')
-      .neq('email', userEmail)
+      .in('email', friendEmails)
       .order('nickname')
     
     if (profiles && profiles.length > 0) {
