@@ -106,6 +106,7 @@ export default function Home() {
   const [selectedReceiverEmail, setSelectedReceiverEmail] = useState<string>('')
   const [availableUsers, setAvailableUsers] = useState<Array<{email: string, nickname: string}>>([])
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [pendingRequests, setPendingRequests] = useState<Array<{id: string, sender_email: string, nickname: string}>>([])
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchUserProfile = useCallback(async () => {
@@ -271,6 +272,32 @@ export default function Home() {
     setDrinkLogs(data || [])
   }, [userEmail])
 
+  const fetchPendingRequests = useCallback(async () => {
+    if (!userEmail) { setPendingRequests([]); return }
+
+    const { data: requests } = await supabase
+      .from('friend_requests')
+      .select('id, sender_email')
+      .eq('receiver_email', userEmail)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+
+    if (!requests || requests.length === 0) { setPendingRequests([]); return }
+
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('email, nickname')
+      .in('email', requests.map(r => r.sender_email))
+
+    const nicknameMap = new Map(profiles?.map(p => [p.email, p.nickname]) || [])
+
+    setPendingRequests(requests.map(r => ({
+      id: r.id,
+      sender_email: r.sender_email,
+      nickname: nicknameMap.get(r.sender_email) || r.sender_email.split('@')[0]
+    })))
+  }, [userEmail])
+
   useEffect(() => {
     const checkAuthAndFetchProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -338,6 +365,7 @@ export default function Home() {
       fetchUserSettings()
       fetchDrinkLogs()
       fetchAvailableUsers()
+      fetchPendingRequests()
     } else {
       setMessages([])
       setSentMessages([])
@@ -347,8 +375,9 @@ export default function Home() {
       setReceiverNickname('')
       setAvailableUsers([])
       setSelectedReceiverEmail('')
+      setPendingRequests([])
     }
-  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchAvailableUsers])
+  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchAvailableUsers, fetchPendingRequests])
 
   useEffect(() => {
     if (selectedReceiverEmail) {
@@ -549,30 +578,48 @@ export default function Home() {
     toast.success('Nickname saved')
   }
 
+  async function handleAcceptRequest(requestId: string, senderNickname: string) {
+    await supabase
+      .from('friend_requests')
+      .update({ status: 'accepted', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+    toast.success(`You and ${senderNickname} are now friends!`)
+    fetchPendingRequests()
+  }
+
+  async function handleRejectRequest(requestId: string) {
+    await supabase
+      .from('friend_requests')
+      .update({ status: 'rejected', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+    fetchPendingRequests()
+  }
+
   async function handleAddFriend(friendEmail: string, friendNickname: string) {
     if (!userEmail) return
 
-    const { data: req } = await supabase
+    const { data: existing } = await supabase
       .from('friend_requests')
-      .select('id, status, sender_email')
-      .or(`and(sender_email.eq.${userEmail},receiver_email.eq.${friendEmail}),and(sender_email.eq.${friendEmail},receiver_email.eq.${userEmail})`)
+      .select('id, status')
+      .eq('sender_email', userEmail)
+      .eq('receiver_email', friendEmail)
       .maybeSingle()
 
-    if (req) {
-      if (req.status === 'accepted') {
-        toast.error(`${friendNickname} is already your friend!`)
-        return
-      }
-      if (req.status === 'pending' && req.sender_email === userEmail) {
+    if (existing) {
+      if (existing.status === 'pending') {
         toast.error(`Already sent a request to ${friendNickname}`)
         return
       }
-      if (req.status === 'pending' && req.sender_email === friendEmail) {
+      if (existing.status === 'accepted') {
+        toast.error(`${friendNickname} is already your friend!`)
+        return
+      }
+      if (existing.status === 'rejected') {
         await supabase
           .from('friend_requests')
-          .update({ status: 'accepted', updated_at: new Date().toISOString() })
-          .eq('id', req.id)
-        toast.success(`You and ${friendNickname} are now friends!`)
+          .update({ status: 'pending', updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+        toast.success(`Re-sent friend request to ${friendNickname}!`)
         return
       }
     }
@@ -914,6 +961,39 @@ export default function Home() {
                 {savingNickname ? 'Saving...' : 'Save'}
               </button>
             </form>
+
+            {pendingRequests.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Friend Requests</h2>
+                <div className="space-y-3">
+                  {pendingRequests.map(req => (
+                    <div
+                      key={req.id}
+                      className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm"
+                    >
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">{req.nickname}</p>
+                        <p className="text-sm text-gray-500">{req.sender_email}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAcceptRequest(req.id, req.nickname)}
+                          className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleRejectRequest(req.id)}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-400 transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-12 pt-8 border-t border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Add Friends</h2>
