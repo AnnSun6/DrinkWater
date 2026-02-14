@@ -1053,6 +1053,18 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            <div className="mt-12 pt-8 border-t border-gray-200">
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  router.push('/login')
+                }}
+                className="w-full py-2 px-4 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition-colors"
+              >
+                Log Out
+              </button>
+            </div>
           </div>
         )}
       </div>
