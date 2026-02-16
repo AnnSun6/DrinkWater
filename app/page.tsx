@@ -79,16 +79,6 @@ function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
   return <span className="text-sm font-semibold text-gray-900">{nickname}</span>
 }
 
-
-async function getReceiverEmail(currentEmail: string): Promise<string | null> {
-  const { data: profiles } = await supabase
-    .from('user_profiles')
-    .select('email')
-    .neq('email', currentEmail)
-  
-  return profiles?.[0]?.email || null
-}
-
 export default function Home() {
   const router = useRouter()
   const [message, setMessage] = useState('')
@@ -107,6 +97,9 @@ export default function Home() {
   const [availableUsers, setAvailableUsers] = useState<Array<{email: string, nickname: string}>>([])
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [pendingRequests, setPendingRequests] = useState<Array<{id: string, sender_email: string, nickname: string}>>([])
+  const [searchResults, setSearchResults] = useState<Array<{email: string, nickname: string}>>([])
+  const [searching, setSearching] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const fetchUserProfile = useCallback(async () => {
@@ -663,10 +656,29 @@ export default function Home() {
     toast.success(`Friend request sent to ${friendNickname}!`)
   }
 
-  const filteredUsers = availableUsers.filter(user => 
-    user.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  async function handleSearchUsers() {
+    if (!userEmail || !searchQuery.trim()) {
+      setSearchResults([])
+      setHasSearched(false)
+      return
+    }
+
+    setSearching(true)
+    setHasSearched(false)
+
+    const friendEmails = availableUsers.map(u => u.email)
+
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('email, nickname')
+      .ilike('email', `%${searchQuery.trim()}%`)
+      .neq('email', userEmail)
+      .limit(10)
+
+    setSearchResults(profiles?.filter(p => !friendEmails.includes(p.email)) || [])
+    setSearching(false)
+    setHasSearched(true)
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -1021,19 +1033,27 @@ export default function Home() {
             <div className="mt-12 pt-8 border-t border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Add Friends</h2>
               
-              <div className="mb-4">
+              <div className="flex gap-2 mb-4">
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search users by name or email..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(e) => { setSearchQuery(e.target.value); setHasSearched(false) }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()}
+                  placeholder="Enter email address to search..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                <button
+                  onClick={handleSearchUsers}
+                  disabled={searching || !searchQuery.trim()}
+                  className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors whitespace-nowrap"
+                >
+                  {searching ? 'Searching...' : 'Search'}
+                </button>
               </div>
 
-              {filteredUsers.length > 0 && (
+              {searchResults.length > 0 ? (
                 <div className="space-y-3">
-                  {filteredUsers.map(user => (
+                  {searchResults.map(user => (
                     <div
                       key={user.email}
                       className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
@@ -1051,7 +1071,9 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-              )}
+              ) : hasSearched && !searching ? (
+                <p className="text-gray-500 text-sm text-center py-4">No users found matching this email</p>
+              ) : null}
             </div>
 
             <div className="mt-12 pt-8 border-t border-gray-200">
