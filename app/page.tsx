@@ -601,6 +601,7 @@ export default function Home() {
       .eq('id', requestId)
     toast.success(`You and ${senderNickname} are now friends!`)
     fetchPendingRequests()
+    fetchAvailableUsers()
   }
 
   async function handleRejectRequest(requestId: string) {
@@ -1023,6 +1024,25 @@ export default function Home() {
                         >
                           Reject
                         </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {availableUsers.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">My Friends</h2>
+                <div className="space-y-3">
+                  {availableUsers.map(user => (
+                    <div
+                      key={user.email}
+                      className="flex items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm"
+                    >
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">{user.nickname}</p>
+                        <p className="text-sm text-gray-500">{user.email}</p>
                       </div>
                     </div>
                   ))}
