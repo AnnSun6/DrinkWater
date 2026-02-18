@@ -346,7 +346,7 @@ export default function Home() {
     }
 
     const channel = supabase
-      .channel('messages')
+      .channel('realtime-updates')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -360,6 +360,20 @@ export default function Home() {
         table: 'message'
       }, (payload) => {
         handleMessageUpdate(payload.new as Message)
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'friend_requests'
+      }, (payload) => {
+        handleNewFriendRequest(payload.new as any)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'friend_requests'
+      }, (payload) => {
+        handleFriendRequestUpdate(payload.new as any)
       })
       .subscribe()
 
@@ -429,6 +443,34 @@ export default function Home() {
       setMessages(prev => prev.map(msg => 
         msg.id === updatedMessage.id ? updatedMessage : msg
       ))
+    }
+  }
+
+  function handleNewFriendRequest(request: { sender_email: string; receiver_email: string }) {
+    if (!userEmail) return
+    if (request.receiver_email === userEmail) {
+      toast.success(`You have a new friend request!`)
+      playNotificationSound()
+      if (Notification.permission === 'granted') {
+        const n = new Notification('New Friend Request', {
+          body: `${request.sender_email} wants to be your friend`,
+          tag: 'friend-request',
+          icon: '/favicon.ico'
+        })
+        n.onclick = () => { window.focus(); n.close() }
+      }
+      fetchPendingRequests()
+    }
+  }
+
+  function handleFriendRequestUpdate(request: { sender_email: string; receiver_email: string; status: string }) {
+    if (!userEmail) return
+    if (request.sender_email === userEmail && request.status === 'accepted') {
+      toast.success('Your friend request was accepted!')
+      fetchAvailableUsers()
+    }
+    if (request.receiver_email === userEmail) {
+      fetchPendingRequests()
     }
   }
 
@@ -710,13 +752,18 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
-                className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                className={`relative flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-colors duration-200 ${
                   activeTab === 'profile'
                     ? 'bg-blue-500 text-white shadow-sm'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 profile
+                {pendingRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {pendingRequests.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
