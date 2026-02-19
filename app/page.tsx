@@ -101,6 +101,7 @@ export default function Home() {
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const addFriendsRef = useRef<HTMLDivElement>(null)
 
   const fetchUserProfile = useCallback(async () => {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -787,53 +788,76 @@ export default function Home() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Remind a Friend</h2>
 
-                {availableUsers.length > 0 && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select a friend:
-                    </label>
-                    <select
-                      value={selectedReceiverEmail}
-                      onChange={(e) => setSelectedReceiverEmail(e.target.value)}
-                      className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-                    >
-                      {availableUsers.length === 1 ? (
-                        <option value={availableUsers[0].email}>
-                          {availableUsers[0].nickname}
-                        </option>
-                      ) : (
-                        <>
-                          <option value="">Select a friend</option>
-                          {availableUsers.map(user => (
-                            <option key={user.email} value={user.email}>
-                              {user.nickname}
-                            </option>
-                          ))}
-                        </>
+                {availableUsers.length > 0 ? (
+                  <>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select a friend:
+                      </label>
+                      <select
+                        value={selectedReceiverEmail}
+                        onChange={(e) => setSelectedReceiverEmail(e.target.value)}
+                        className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+                      >
+                        {availableUsers.length === 1 ? (
+                          <option value={availableUsers[0].email}>
+                            {availableUsers[0].nickname}
+                          </option>
+                        ) : (
+                          <>
+                            <option value="">Select a friend</option>
+                            {availableUsers.map(user => (
+                              <option key={user.email} value={user.email}>
+                                {user.nickname}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                      {selectedReceiverEmail && receiverNickname && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          Reminding: <span className="font-semibold text-gray-700">{receiverNickname}</span>
+                        </p>
                       )}
-                    </select>
-                    {selectedReceiverEmail && receiverNickname && (
-                      <p className="text-sm text-gray-500 mt-2">
-                        Reminding: <span className="font-semibold text-gray-700">{receiverNickname}</span>
-                      </p>
-                    )}
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Type your message..."
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow mb-4"
+                    />
+
+                    <button
+                      onClick={handleclick}
+                      className="mt-auto w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                    >
+                      Tap to remind your friend
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
+                    <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                      <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 font-medium mb-1">No friends yet</p>
+                    <p className="text-sm text-gray-500 mb-4">Add a friend first, then you can send them water reminders!</p>
+                    <button
+                      onClick={() => {
+                        setActiveTab('profile')
+                        setTimeout(() => {
+                          addFriendsRef.current?.scrollIntoView({ behavior: 'smooth' })
+                        }, 100)
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-5 rounded-lg transition-colors"
+                    >
+                      Go to Add Friends
+                    </button>
                   </div>
                 )}
-
-                <input
-                  type="text"
-                  placeholder="Type your message..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow mb-4"
-                />
-
-                <button
-                  onClick={handleclick}
-                  className="mt-auto w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-                >
-                  Tap to remind your friend
-                </button>
               </div>
 
               {/*Water Intake card*/}
@@ -886,7 +910,7 @@ export default function Home() {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Received Messages</h2>
 
               {messages.length === 0 ? (
-                <p className="text-gray-500 text-sm">暂无消息</p>
+                <p className="text-gray-500 text-sm">No messages yet</p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {messages.map((msg) => (
@@ -926,7 +950,7 @@ export default function Home() {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Messages You Sent</h2>
 
               {sentMessages.length === 0 ? (
-                <p className="text-gray-500 text-sm">暂无消息</p>
+                <p className="text-gray-500 text-sm">No messages yet</p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {sentMessages.map((msg) => (
@@ -1097,8 +1121,9 @@ export default function Home() {
               </div>
             )}
 
-            <div className="mt-12 pt-8 border-t border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Add Friends</h2>
+            <div ref={addFriendsRef} className="mt-12 pt-8 border-t border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Friends</h2>
+              <p className="text-sm text-gray-500 mb-4">Search by email to find and add friends. Once they accept, you can send them water reminders!</p>
               
               <div className="flex gap-2 mb-4">
                 <input
