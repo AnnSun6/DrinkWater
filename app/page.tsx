@@ -447,14 +447,21 @@ export default function Home() {
     }
   }
 
-  function handleNewFriendRequest(request: { sender_email: string; receiver_email: string }) {
+  async function handleNewFriendRequest(request: { sender_email: string; receiver_email: string }) {
     if (!userEmail) return
     if (request.receiver_email === userEmail) {
-      toast.success(`You have a new friend request!`)
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('nickname')
+        .eq('email', request.sender_email)
+        .maybeSingle()
+      const displayName = profile?.nickname || request.sender_email.split('@')[0]
+
+      toast.success(`${displayName} wants to be your friend!`)
       playNotificationSound()
       if (Notification.permission === 'granted') {
         const n = new Notification('New Friend Request', {
-          body: `${request.sender_email} wants to be your friend`,
+          body: `${displayName} wants to be your friend`,
           tag: 'friend-request',
           icon: '/favicon.ico'
         })
@@ -1123,7 +1130,7 @@ export default function Home() {
 
             <div ref={addFriendsRef} className="mt-12 pt-8 border-t border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Friends</h2>
-              <p className="text-sm text-gray-500 mb-4">Search by email to find and add friends. Once they accept, you can send them water reminders!</p>
+              <p className="text-sm text-gray-500 mb-4">Search by email to find and add friends. </p>
               
               <div className="flex gap-2 mb-4">
                 <input
