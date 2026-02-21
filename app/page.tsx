@@ -6,8 +6,8 @@ import toast from 'react-hot-toast'
 
 type Message = {
   id: string
-  sender: string
-  receiver?: string
+  sender_id: string
+  receiver_id?: string
   message: string
   created_at: string
   is_read?: boolean
@@ -15,28 +15,28 @@ type Message = {
 
 type DrinkLog = {
   id: string
-  user_name: string
+  user_id: string
   amount_ml: number
   created_at: string
 }
 
 type UserSettings = {
   id: string
-  user_name: string
+  user_id: string
   cup_size_ml: number
   updated_at: string
 }
 
 // 消息发送者名称组件（显示昵称）
-function MessageSenderName({ senderEmail }: { senderEmail: string }) {
-  const [nickname, setNickname] = useState<string>(senderEmail.split('@')[0])
+function MessageSenderName({ senderId }: { senderId: string }) {
+  const [nickname, setNickname] = useState<string>('...')
   
   useEffect(() => {
     const fetchNickname = async () => {
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('nickname')
-        .eq('email', senderEmail)
+        .eq('user_id', senderId)
         .maybeSingle()
       
       if (profile?.nickname) {
@@ -45,16 +45,16 @@ function MessageSenderName({ senderEmail }: { senderEmail: string }) {
     }
     
     fetchNickname()
-  }, [senderEmail])
+  }, [senderId])
   
   return <span className="text-sm font-semibold text-gray-900">{nickname}:</span>
 }
 
-function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
-  const [nickname, setNickname] = useState<string>(receiverEmail ? receiverEmail.split('@')[0] : '')
+function MessageReceiverName({ receiverId }: { receiverId: string }) {
+  const [nickname, setNickname] = useState<string>('')
   
   useEffect(() => {
-    if (!receiverEmail) {
+    if (!receiverId) {
       setNickname('')
       return
     }
@@ -63,7 +63,7 @@ function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('nickname')
-        .eq('email', receiverEmail)
+        .eq('user_id', receiverId)
         .maybeSingle()
       
       if (profile?.nickname) {
@@ -72,7 +72,7 @@ function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
     }
     
     fetchNickname()
-  }, [receiverEmail])
+  }, [receiverId])
   
   if (!nickname) return null
   
@@ -82,7 +82,8 @@ function MessageReceiverName({ receiverEmail }: { receiverEmail: string }) {
 export default function Home() {
   const router = useRouter()
   const [message, setMessage] = useState('')
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null) // 仅用于展示
   const [userNickname, setUserNickname] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [sentMessages, setSentMessages] = useState<Message[]>([])
@@ -93,11 +94,11 @@ export default function Home() {
   const [profileNickname, setProfileNickname] = useState<string>('')
   const [savingNickname, setSavingNickname] = useState(false)
   const [receiverNickname, setReceiverNickname] = useState<string>('')
-  const [selectedReceiverEmail, setSelectedReceiverEmail] = useState<string>('')
-  const [availableUsers, setAvailableUsers] = useState<Array<{email: string, nickname: string}>>([])
+  const [selectedReceiverId, setSelectedReceiverId] = useState<string>('')
+  const [availableUsers, setAvailableUsers] = useState<Array<{user_id: string, email: string, nickname: string}>>([])
   const [searchQuery, setSearchQuery] = useState<string>('')
-  const [pendingRequests, setPendingRequests] = useState<Array<{id: string, sender_email: string, nickname: string}>>([])
-  const [searchResults, setSearchResults] = useState<Array<{email: string, nickname: string}>>([])
+  const [pendingRequests, setPendingRequests] = useState<Array<{id: string, sender_id: string, nickname: string}>>([])
+  const [searchResults, setSearchResults] = useState<Array<{user_id: string, email: string, nickname: string}>>([])
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -106,31 +107,33 @@ export default function Home() {
   const fetchUserProfile = useCallback(async () => {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
-    if (sessionError || !session?.user?.email) {
+    if (sessionError || !session?.user?.id) {
       router.push('/login')
       return
     }
 
-    const email = session.user.email
-    setUserEmail(email)
+    const id = session.user.id
+    setUserId(id)
+    setUserEmail(session.user.email || null) // 仅用于展示
 
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('nickname')
-      .eq('email', email)
+      .eq('user_id', id)
       .maybeSingle()
 
-    // 如果用户档案不存在，自动创建一个默认档案（使用邮箱前缀作为昵称）
+    // 如果用户档案不存在，自动创建一个默认档案
     if (!profile) {
-      const defaultNickname = email.split('@')[0]
+      const defaultNickname = session.user.email?.split('@')[0] || 'User'
       await supabase
         .from('user_profiles')
         .upsert({
-          email: email,
+          user_id: id,
+          email: session.user.email,
           nickname: defaultNickname,
           updated_at: new Date().toISOString()
         }, {
-          onConflict: 'email'
+          onConflict: 'user_id'
         })
       setUserNickname(defaultNickname)
       setProfileNickname(defaultNickname)
@@ -142,54 +145,54 @@ export default function Home() {
   }, [router])
 
   const fetchAvailableUsers = useCallback(async () => {
-    if (!userEmail) {
+    if (!userId) {
       setAvailableUsers([])
-      setSelectedReceiverEmail('')
+      setSelectedReceiverId('')
       return
     }
 
     const { data: sent } = await supabase
       .from('friend_requests')
-      .select('receiver_email')
-      .eq('sender_email', userEmail)
+      .select('receiver_id')
+      .eq('sender_id', userId)
       .eq('status', 'accepted')
 
     const { data: received } = await supabase
       .from('friend_requests')
-      .select('sender_email')
-      .eq('receiver_email', userEmail)
+      .select('sender_id')
+      .eq('receiver_id', userId)
       .eq('status', 'accepted')
 
-    const friendEmails = [
-      ...(sent?.map(r => r.receiver_email) || []),
-      ...(received?.map(r => r.sender_email) || [])
+    const friendIds = [
+      ...(sent?.map(r => r.receiver_id) || []),
+      ...(received?.map(r => r.sender_id) || [])
     ]
 
-    if (friendEmails.length === 0) {
+    if (friendIds.length === 0) {
       setAvailableUsers([])
-      setSelectedReceiverEmail('')
+      setSelectedReceiverId('')
       return
     }
 
     const { data: profiles } = await supabase
       .from('user_profiles')
-      .select('email, nickname')
-      .in('email', friendEmails)
+      .select('user_id, email, nickname')
+      .in('user_id', friendIds)
       .order('nickname')
     
     if (profiles && profiles.length > 0) {
       setAvailableUsers(profiles)
-      if (!selectedReceiverEmail || !profiles.find(p => p.email === selectedReceiverEmail)) {
-        setSelectedReceiverEmail(profiles[0].email)
+      if (!selectedReceiverId || !profiles.find(p => p.user_id === selectedReceiverId)) {
+        setSelectedReceiverId(profiles[0].user_id)
       }
     } else {
       setAvailableUsers([])
-      setSelectedReceiverEmail('')
+      setSelectedReceiverId('')
     }
-  }, [userEmail, selectedReceiverEmail])
+  }, [userId, selectedReceiverId])
 
   const fetchReceiverNickname = useCallback(async () => {
-    if (!selectedReceiverEmail) {
+    if (!selectedReceiverId) {
       setReceiverNickname('')
       return
     }
@@ -197,14 +200,14 @@ export default function Home() {
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('nickname')
-      .eq('email', selectedReceiverEmail)
+      .eq('user_id', selectedReceiverId)
       .maybeSingle()
     
-    setReceiverNickname(profile?.nickname || selectedReceiverEmail.split('@')[0])
-  }, [selectedReceiverEmail])
+    setReceiverNickname(profile?.nickname || 'Unknown')
+  }, [selectedReceiverId])
 
   const fetchMessages = useCallback(async () => {
-    if (!userEmail) {
+    if (!userId) {
       setMessages([])
       return
     }
@@ -212,16 +215,16 @@ export default function Home() {
     const { data } = await supabase
       .from('message')
       .select('*')
-      .eq('receiver', userEmail)
+      .eq('receiver_id', userId)
       .order('created_at', { ascending: false })
       .limit(5)
     
     setMessages(data || [])
-  }, [userEmail])
+  }, [userId])
 
 
   const fetchSentMessages = useCallback(async() => {
-    if (!userEmail) {
+    if (!userId) {
       setSentMessages([])
       return
     }
@@ -229,15 +232,15 @@ export default function Home() {
     const { data } = await supabase
       .from('message')
       .select('*')
-      .eq('sender', userEmail)
+      .eq('sender_id', userId)
       .order('created_at', { ascending: false })
       .limit(5)
     
     setSentMessages(data || [])
-  }, [userEmail])
+  }, [userId])
 
   const fetchTodayTotalMl = useCallback(async () => {
-    if (!userEmail) {
+    if (!userId) {
       setTodayTotalMl(0)
       return
     }
@@ -249,15 +252,15 @@ export default function Home() {
     const { data } = await supabase
       .from('drink_logs')
       .select('amount_ml')
-      .eq('user_name', userEmail)
+      .eq('user_id', userId)
       .gte('created_at', todayStart)
     
     const total = data?.reduce((sum, log) => sum + log.amount_ml, 0) || 0
     setTodayTotalMl(total)
-  }, [userEmail])
+  }, [userId])
 
   const fetchUserSettings = useCallback(async () => {
-    if (!userEmail) {
+    if (!userId) {
       setCupSizeMl(250)
       return
     }
@@ -265,16 +268,16 @@ export default function Home() {
     const { data } = await supabase
       .from('user_settings')
       .select('cup_size_ml')
-      .eq('user_name', userEmail)
+      .eq('user_id', userId)
       .single()
     
     if (data?.cup_size_ml) {
       setCupSizeMl(data.cup_size_ml)
     }
-  }, [userEmail])
+  }, [userId])
 
   const fetchDrinkLogs = useCallback(async () => {
-    if (!userEmail) {
+    if (!userId) {
       setDrinkLogs([])
       return
     }
@@ -282,20 +285,20 @@ export default function Home() {
     const { data } = await supabase
       .from('drink_logs')
       .select('*')
-      .eq('user_name', userEmail)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
     
     setDrinkLogs(data || [])
-  }, [userEmail])
+  }, [userId])
 
   const fetchPendingRequests = useCallback(async () => {
-    if (!userEmail) { setPendingRequests([]); return }
+    if (!userId) { setPendingRequests([]); return }
 
     const { data: requests } = await supabase
       .from('friend_requests')
-      .select('id, sender_email')
-      .eq('receiver_email', userEmail)
+      .select('id, sender_id')
+      .eq('receiver_id', userId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
 
@@ -303,17 +306,17 @@ export default function Home() {
 
     const { data: profiles } = await supabase
       .from('user_profiles')
-      .select('email, nickname')
-      .in('email', requests.map(r => r.sender_email))
+      .select('user_id, nickname')
+      .in('user_id', requests.map(r => r.sender_id))
 
-    const nicknameMap = new Map(profiles?.map(p => [p.email, p.nickname]) || [])
+    const nicknameMap = new Map(profiles?.map(p => [p.user_id, p.nickname]) || [])
 
     setPendingRequests(requests.map(r => ({
       id: r.id,
-      sender_email: r.sender_email,
-      nickname: nicknameMap.get(r.sender_email) || r.sender_email.split('@')[0]
+      sender_id: r.sender_id,
+      nickname: nicknameMap.get(r.sender_id) || 'Unknown'
     })))
-  }, [userEmail])
+  }, [userId])
 
   useEffect(() => {
     const checkAuthAndFetchProfile = async () => {
@@ -389,7 +392,7 @@ export default function Home() {
   }, [router, fetchUserProfile])
 
   useEffect(() => {
-    if (userEmail) {
+    if (userId) {
       fetchMessages()
       fetchSentMessages()
       fetchTodayTotalMl()
@@ -405,57 +408,57 @@ export default function Home() {
       setDrinkLogs([])
       setReceiverNickname('')
       setAvailableUsers([])
-      setSelectedReceiverEmail('')
+      setSelectedReceiverId('')
       setPendingRequests([])
     }
-  }, [userEmail, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchAvailableUsers, fetchPendingRequests])
+  }, [userId, fetchMessages, fetchSentMessages, fetchTodayTotalMl, fetchUserSettings, fetchDrinkLogs, fetchAvailableUsers, fetchPendingRequests])
 
   useEffect(() => {
-    if (selectedReceiverEmail) {
+    if (selectedReceiverId) {
       fetchReceiverNickname()
     } else {
       setReceiverNickname('')
     }
-  }, [selectedReceiverEmail, fetchReceiverNickname])
+  }, [selectedReceiverId, fetchReceiverNickname])
 
   function handleNewMessage(newMessage: Message) {
-    if (!userEmail) return
+    if (!userId) return
 
-    if (newMessage.receiver === userEmail) {
+    if (newMessage.receiver_id === userId) {
       showNotification(newMessage)
       playNotificationSound()
-      toast.success(`收到来自 ${newMessage.sender} 的提醒！`)
+      toast.success('收到新的提醒！')
       fetchMessages()
     }
     
-    if (newMessage.sender === userEmail) {
+    if (newMessage.sender_id === userId) {
       fetchSentMessages()
     }
   }
 
   function handleMessageUpdate(updatedMessage: Message) {
-    if (!userEmail) return
+    if (!userId) return
 
-    if (updatedMessage.sender === userEmail) {
+    if (updatedMessage.sender_id === userId) {
       setSentMessages(prev => prev.map(msg => 
         msg.id === updatedMessage.id ? updatedMessage : msg
       ))
-    } else if (updatedMessage.receiver === userEmail) {
+    } else if (updatedMessage.receiver_id === userId) {
       setMessages(prev => prev.map(msg => 
         msg.id === updatedMessage.id ? updatedMessage : msg
       ))
     }
   }
 
-  async function handleNewFriendRequest(request: { sender_email: string; receiver_email: string }) {
-    if (!userEmail) return
-    if (request.receiver_email === userEmail) {
+  async function handleNewFriendRequest(request: { sender_id: string; receiver_id: string }) {
+    if (!userId) return
+    if (request.receiver_id === userId) {
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('nickname')
-        .eq('email', request.sender_email)
+        .eq('user_id', request.sender_id)
         .maybeSingle()
-      const displayName = profile?.nickname || request.sender_email.split('@')[0]
+      const displayName = profile?.nickname || 'Someone'
 
       toast.success(`${displayName} wants to be your friend!`)
       playNotificationSound()
@@ -471,22 +474,22 @@ export default function Home() {
     }
   }
 
-  function handleFriendRequestUpdate(request: { sender_email: string; receiver_email: string; status: string }) {
-    if (!userEmail) return
-    if (request.sender_email === userEmail && request.status === 'accepted') {
+  function handleFriendRequestUpdate(request: { sender_id: string; receiver_id: string; status: string }) {
+    if (!userId) return
+    if (request.sender_id === userId && request.status === 'accepted') {
       toast.success('Your friend request was accepted!')
       fetchAvailableUsers()
     }
-    if (request.receiver_email === userEmail) {
+    if (request.receiver_id === userId) {
       fetchPendingRequests()
     }
   }
 
-  function showNotification(message: { sender: string; message: string }) {
+  function showNotification(message: { sender_id: string; message: string }) {
     if (Notification.permission !== 'granted') return
 
     const notification = new Notification('Notification from fanfan', {
-      body: `${message.sender}: ${message.message}`,
+      body: message.message,
       tag: 'water-reminder',
       icon: '/favicon.ico'
     })
@@ -539,11 +542,11 @@ export default function Home() {
   }
 
   async function handleDrink(amountMl: number) {
-    if (!userEmail) return
+    if (!userId) return
     
     await supabase
       .from('drink_logs')
-      .insert([{ user_name: userEmail, amount_ml: amountMl }])
+      .insert([{ user_id: userId, amount_ml: amountMl }])
     
     await fetchTodayTotalMl()
     await fetchDrinkLogs()
@@ -551,7 +554,7 @@ export default function Home() {
   }
 
   async function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!userEmail) return
+    if (!userId) return
     
     const newSize = parseInt(e.target.value) || 250
     if (newSize <= 0 || newSize > 1000) return
@@ -559,23 +562,23 @@ export default function Home() {
     await supabase
       .from('user_settings')
       .upsert({
-        user_name: userEmail,
+        user_id: userId,
         cup_size_ml: newSize,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'user_name'
+        onConflict: 'user_id'
       })
     
     setCupSizeMl(newSize)
   }
 
   async function handleclick() {
-    if (!userEmail || !message) {
+    if (!userId || !message) {
       toast.error('Please enter a message') 
       return
     }
     
-    if (!selectedReceiverEmail) {
+    if (!selectedReceiverId) {
       toast.error('Please select a receiver')
       return
     }
@@ -588,8 +591,8 @@ export default function Home() {
       .from('message')
       .insert([
         { 
-          sender: userEmail,
-          receiver: selectedReceiverEmail,
+          sender_id: userId,
+          receiver_id: selectedReceiverId,
           message: message     
         }
       ])
@@ -619,18 +622,18 @@ export default function Home() {
    async function handleSaveNickname(e: React.FormEvent) {
     e.preventDefault()
     
-    if (!profileNickname.trim() || !userEmail) return
+    if (!profileNickname.trim() || !userId) return
 
     setSavingNickname(true)
 
     const { error } = await supabase
       .from('user_profiles')
       .upsert({
-        email: userEmail,
+        user_id: userId,
         nickname: profileNickname.trim(),
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'email'
+        onConflict: 'user_id'
       })
 
     setSavingNickname(false)
@@ -662,14 +665,14 @@ export default function Home() {
     fetchPendingRequests()
   }
 
-  async function handleAddFriend(friendEmail: string, friendNickname: string) {
-    if (!userEmail) return
+  async function handleAddFriend(friendId: string, friendNickname: string) {
+    if (!userId) return
 
     const { data: existing } = await supabase
       .from('friend_requests')
       .select('id, status')
-      .eq('sender_email', userEmail)
-      .eq('receiver_email', friendEmail)
+      .eq('sender_id', userId)
+      .eq('receiver_id', friendId)
       .maybeSingle()
 
     if (existing) {
@@ -694,8 +697,8 @@ export default function Home() {
     const { error } = await supabase
       .from('friend_requests')
       .insert([{
-        sender_email: userEmail,
-        receiver_email: friendEmail,
+        sender_id: userId,
+        receiver_id: friendId,
         status: 'pending'
       }])
 
@@ -708,7 +711,7 @@ export default function Home() {
   }
 
   async function handleSearchUsers() {
-    if (!userEmail || !searchQuery.trim()) {
+    if (!userId || !searchQuery.trim()) {
       setSearchResults([])
       setHasSearched(false)
       return
@@ -717,16 +720,16 @@ export default function Home() {
     setSearching(true)
     setHasSearched(false)
 
-    const friendEmails = availableUsers.map(u => u.email)
+    const friendIds = availableUsers.map(u => u.user_id)
 
     const { data: profiles } = await supabase
       .from('user_profiles')
-      .select('email, nickname')
-      .ilike('email', `%${searchQuery.trim()}%`)
-      .neq('email', userEmail)
+      .select('user_id, email, nickname')
+      .or(`email.ilike.%${searchQuery.trim()}%,nickname.ilike.%${searchQuery.trim()}%`)
+      .neq('user_id', userId)
       .limit(10)
 
-    setSearchResults(profiles?.filter(p => !friendEmails.includes(p.email)) || [])
+    setSearchResults(profiles?.filter(p => !friendIds.includes(p.user_id)) || [])
     setSearching(false)
     setHasSearched(true)
   }
@@ -802,26 +805,26 @@ export default function Home() {
                         Select a friend:
                       </label>
                       <select
-                        value={selectedReceiverEmail}
-                        onChange={(e) => setSelectedReceiverEmail(e.target.value)}
+                        value={selectedReceiverId}
+                        onChange={(e) => setSelectedReceiverId(e.target.value)}
                         className="w-full bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
                       >
                         {availableUsers.length === 1 ? (
-                          <option value={availableUsers[0].email}>
+                          <option value={availableUsers[0].user_id}>
                             {availableUsers[0].nickname}
                           </option>
                         ) : (
                           <>
                             <option value="">Select a friend</option>
                             {availableUsers.map(user => (
-                              <option key={user.email} value={user.email}>
+                              <option key={user.user_id} value={user.user_id}>
                                 {user.nickname}
                               </option>
                             ))}
                           </>
                         )}
                       </select>
-                      {selectedReceiverEmail && receiverNickname && (
+                      {selectedReceiverId && receiverNickname && (
                         <p className="text-sm text-gray-500 mt-2">
                           Reminding: <span className="font-semibold text-gray-700">{receiverNickname}</span>
                         </p>
@@ -927,7 +930,7 @@ export default function Home() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <MessageSenderName senderEmail={msg.sender} />
+                          <MessageSenderName senderId={msg.sender_id} />
                           <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -968,7 +971,7 @@ export default function Home() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <span className="text-sm font-semibold text-gray-900">You →</span>
-                          <MessageReceiverName receiverEmail={msg.receiver || ''} />
+                          <MessageReceiverName receiverId={msg.receiver_id || ''} />
                           <span className="text-sm text-gray-700">:</span>
                           <p className="text-sm text-gray-700 truncate">{msg.message}</p>
                         </div>
@@ -1087,7 +1090,6 @@ export default function Home() {
                     >
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">{req.nickname}</p>
-                        <p className="text-sm text-gray-500">{req.sender_email}</p>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -1115,7 +1117,7 @@ export default function Home() {
                 <div className="space-y-3">
                   {availableUsers.map(user => (
                     <div
-                      key={user.email}
+                      key={user.user_id}
                       className="flex items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm"
                     >
                       <div className="flex-1">
@@ -1130,7 +1132,7 @@ export default function Home() {
 
             <div ref={addFriendsRef} className="mt-12 pt-8 border-t border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Friends</h2>
-              <p className="text-sm text-gray-500 mb-4">Search by email to find and add friends. </p>
+              <p className="text-sm text-gray-500 mb-4">Search by email or nickname to find and add friends.</p>
               
               <div className="flex gap-2 mb-4">
                 <input
@@ -1138,7 +1140,7 @@ export default function Home() {
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setHasSearched(false) }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()}
-                  placeholder="Enter email address to search..."
+                  placeholder="Enter email or nickname to search..."
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
@@ -1154,7 +1156,7 @@ export default function Home() {
                 <div className="space-y-3">
                   {searchResults.map(user => (
                     <div
-                      key={user.email}
+                      key={user.user_id}
                       className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex-1">
@@ -1162,7 +1164,7 @@ export default function Home() {
                         <p className="text-sm text-gray-500">{user.email}</p>
                       </div>
                       <button
-                        onClick={() => handleAddFriend(user.email, user.nickname)}
+                        onClick={() => handleAddFriend(user.user_id, user.nickname)}
                         className="ml-4 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                       >
                         Add Friend
@@ -1171,7 +1173,7 @@ export default function Home() {
                   ))}
                 </div>
               ) : hasSearched && !searching ? (
-                <p className="text-gray-500 text-sm text-center py-4">No users found matching this email</p>
+                <p className="text-gray-500 text-sm text-center py-4">No users found</p>
               ) : null}
             </div>
 
