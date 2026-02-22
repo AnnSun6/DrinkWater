@@ -1043,17 +1043,19 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
             
             <form onSubmit={handleSaveNickname} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={userEmail || ''}
-                  disabled
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
-                />
-              </div>
+            {userEmail && !userEmail.endsWith('@wechat.placeholder') && (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Email Address
+    </label>
+    <input
+      type="email"
+      value={userEmail}
+      disabled
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+    />
+  </div>
+)}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
