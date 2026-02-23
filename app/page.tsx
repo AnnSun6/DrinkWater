@@ -89,6 +89,7 @@ export default function Home() {
   const [sentMessages, setSentMessages] = useState<Message[]>([])
   const [todayTotalMl, setTodayTotalMl] = useState(0)
   const [cupSizeMl, setCupSizeMl] = useState(250)
+  const [dailyGoalMl, setDailyGoalMl] = useState(2000)
   const [activeTab, setActiveTab] = useState<'reminder' | 'log' | 'profile'>('reminder')
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([])
   const [profileNickname, setProfileNickname] = useState<string>('')
@@ -262,17 +263,21 @@ export default function Home() {
   const fetchUserSettings = useCallback(async () => {
     if (!userId) {
       setCupSizeMl(250)
+      setDailyGoalMl(2000)
       return
     }
     
     const { data } = await supabase
       .from('user_settings')
-      .select('cup_size_ml')
+      .select('cup_size_ml, daily_goal_ml')
       .eq('user_id', userId)
       .single()
     
     if (data?.cup_size_ml) {
       setCupSizeMl(data.cup_size_ml)
+    }
+    if (data?.daily_goal_ml) {
+      setDailyGoalMl(data.daily_goal_ml)
     }
   }, [userId])
 
@@ -570,6 +575,25 @@ export default function Home() {
       })
     
     setCupSizeMl(newSize)
+  }
+
+  async function handleDailyGoalChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!userId) return
+    
+    const newGoal = parseInt(e.target.value) || 2000
+    if (newGoal <= 0 || newGoal > 10000) return
+    
+    await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        daily_goal_ml: newGoal,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+    
+    setDailyGoalMl(newGoal)
   }
 
   async function handleclick() {
@@ -875,22 +899,47 @@ export default function Home() {
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Water Intake</h2>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-                  <p className="text-lg font-semibold text-blue-900">
-                    Today&apos;s Total: {todayTotalMl} ml
-                  </p>
-                </div>
+  <p className="text-lg font-semibold text-blue-900">
+    Today&apos;s Total: {todayTotalMl} / {dailyGoalMl} ml
+  </p>
+  <div className="w-full bg-blue-200 rounded-full h-3 mt-2">
+    <div
+      className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+      style={{ width: `${Math.min((todayTotalMl / dailyGoalMl) * 100, 100)}%` }}
+    />
+  </div>
+  <p className="text-xs text-blue-700 mt-1">
+    {todayTotalMl >= dailyGoalMl
+      ? 'Goal reached!'
+      : `${dailyGoalMl - todayTotalMl} ml to go`}
+  </p>
+</div>
 
-                <div className="flex items-center gap-2 mb-4">
-                  <label className="text-sm text-gray-700 whitespace-nowrap">Cup Size (ml):</label>
-                  <input
-                    type="number"
-                    min="50"
-                    max="1000"
-                    value={cupSizeMl}
-                    onChange={handleCupSizeChange}
-                    className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
-                  />
-                </div>
+<div className="flex items-center gap-4 mb-4">
+  <div className="flex items-center gap-2">
+    <label className="text-sm text-gray-700 whitespace-nowrap">Cup (ml):</label>
+    <input
+      type="number"
+      min="50"
+      max="1000"
+      value={cupSizeMl}
+      onChange={handleCupSizeChange}
+      className="w-20 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+    />
+  </div>
+  <div className="flex items-center gap-2">
+    <label className="text-sm text-gray-700 whitespace-nowrap">Goal (ml):</label>
+    <input
+      type="number"
+      min="500"
+      max="10000"
+      step="100"
+      value={dailyGoalMl}
+      onChange={handleDailyGoalChange}
+      className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+    />
+  </div>
+</div>
 
                 <div className="mt-auto grid grid-cols-3 gap-2">
                   <button
@@ -1043,17 +1092,19 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
             
             <form onSubmit={handleSaveNickname} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={userEmail || ''}
-                  disabled
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
-                />
-              </div>
+            {userEmail && !userEmail.endsWith('@wechat.placeholder') && (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Email Address
+    </label>
+    <input
+      type="email"
+      value={userEmail}
+      disabled
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+    />
+  </div>
+)}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
