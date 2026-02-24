@@ -1,6 +1,6 @@
 "use client"
 import { supabase } from '@/lib/supabase'
-import {useState, useEffect, useRef, useCallback} from 'react'
+import {useState, useEffect, useRef, useCallback, useMemo} from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -296,6 +296,33 @@ export default function Home() {
     
     setDrinkLogs(data || [])
   }, [userId])
+
+  const groupedDrinkLogs = useMemo(() => {
+    const groups: { date: string; logs: DrinkLog[]; total: number }[] = []
+    const map = new Map<string, DrinkLog[]>()
+
+    for (const log of drinkLogs) {
+      const date = new Date(log.created_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+      if (!map.has(date)) {
+        map.set(date, [])
+      }
+      map.get(date)!.push(log)
+    }
+
+    for (const [date, logs] of map) {
+      groups.push({
+        date,
+        logs,
+        total: logs.reduce((sum, l) => sum + l.amount_ml, 0)
+      })
+    }
+
+    return groups
+  }, [drinkLogs])
 
   const fetchPendingRequests = useCallback(async () => {
     if (!userId) { setPendingRequests([]); return }
@@ -1061,24 +1088,32 @@ export default function Home() {
 
             <h1 className="text-3xl font-bold text-gray-900 mb-6">your water intake history</h1>
             
-            {drinkLogs.length === 0 ? (
+            {groupedDrinkLogs.length === 0 ? (
               <p className="text-gray-500 text-center py-8">no water intake history</p>
             ) : (
-              <div className="space-y-3">
-                {drinkLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="bg-white border border-slate-200 rounded-md px-4 py-3 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-lg font-semibold text-blue-600">
-                          {log.amount_ml} ml
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {formatTime(log.created_at)}
-                      </div>
+              <div className="space-y-6">
+                {groupedDrinkLogs.map((group) => (
+                  <div key={group.date}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-gray-700">{group.date}</h3>
+                      <span className="text-sm font-semibold text-blue-600">{group.total} ml</span>
+                    </div>
+                    <div className="space-y-2">
+                      {group.logs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="bg-white border border-slate-200 rounded-md px-4 py-3 shadow-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-semibold text-blue-600">
+                              {log.amount_ml} ml
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              {formatTime(log.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
