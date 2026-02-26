@@ -40,4 +40,6 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ error: '用户不存在', openid }, { status: 404 })
+
+  //test account name
 }
