@@ -39,7 +39,36 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  return NextResponse.json({ error: '用户不存在', openid }, { status: 404 })
+  // 新用户，创建账号
+  const { data: created, error: createErr } = await getSupabaseAdmin().auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
 
-  //test account name
+  if (createErr || !created.user) {
+    return NextResponse.json({ error: '创建用户失败' }, { status: 500 })
+  }
+
+  const newUserId = created.user.id
+  const nickname = `微信用户_${openid.slice(-6)}`
+
+  // 写入业务表
+  await getSupabaseAdmin().from('users').insert({ id: newUserId, nickname })
+  await getSupabaseAdmin().from('user_identities').insert({ user_id: newUserId, provider: 'wechat', provider_id: openid })
+  await getSupabaseAdmin().from('user_profiles').insert({ user_id: newUserId, email, nickname })
+
+  // 登录拿 token
+  const { data: newSignIn } = await getSupabaseAdmin().auth.signInWithPassword({ email, password })
+
+  if (!newSignIn.session) {
+    return NextResponse.json({ error: '登录失败' }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    access_token: newSignIn.session.access_token,
+    refresh_token: newSignIn.session.refresh_token,
+    user_id: newUserId,
+    is_new_user: true,
+  })
 }
