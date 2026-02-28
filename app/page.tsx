@@ -585,6 +585,13 @@ export default function Home() {
     toast.success(`Recorded ${amountMl}ml!`)
   }
 
+  async function handleDeleteDrinkLog(logId: string) {
+    await supabase.from('drink_logs').delete().eq('id', logId)
+    await fetchTodayTotalMl()
+    await fetchDrinkLogs()
+    toast.success('Deleted')
+  }
+
   async function handleCupSizeChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (!userId) return
     
@@ -1108,9 +1115,17 @@ export default function Home() {
                             <span className="text-lg font-semibold text-blue-600">
                               {log.amount_ml} ml
                             </span>
-                            <span className="text-sm text-gray-500">
-                              {formatTime(log.created_at)}
-                            </span>
+                            <div className="flex items-center gap-2">
+  <span className="text-sm text-gray-500">
+    {formatTime(log.created_at)}
+  </span>
+  <button
+    onClick={() => handleDeleteDrinkLog(log.id)}
+    className="text-red-400 hover:text-red-600 text-xs"
+  >
+    delete
+  </button>
+</div>
                           </div>
                         </div>
                       ))}
