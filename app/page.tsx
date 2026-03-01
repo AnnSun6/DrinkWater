@@ -639,6 +639,63 @@ export default function Home() {
     setDailyGoalMl(newGoal)
   }
 
+  async function handleReminderStartChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!userId) return
+
+    const val = parseInt(e.target.value) || 0
+    if (val < 0 || val > 23) return
+
+    setReminderStart(val)
+
+    await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        reminder_start_hour: val,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+  }
+
+  async function handleReminderEndChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!userId) return
+
+    const val = parseInt(e.target.value) || 0
+    if (val < 0 || val > 23) return
+
+    setReminderEnd(val)
+
+    await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        reminder_end_hour: val,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+  }
+
+  async function handleReminderIntervalChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!userId) return
+
+    const val = parseInt(e.target.value) || 0
+    if (val < 0 || val > 120) return
+
+    setReminderInterval(val)
+
+    await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        reminder_interval_min: val,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+  }
+
   async function handleclick() {
     if (!userId || !message) {
       toast.error('Please enter a message') 
@@ -980,6 +1037,43 @@ export default function Home() {
       value={dailyGoalMl}
       onChange={handleDailyGoalChange}
       className="w-24 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+    />
+  </div>
+</div>
+
+<div className="flex items-center gap-4 mb-4">
+  <div className="flex items-center gap-2">
+    <label className="text-sm text-gray-700 whitespace-nowrap">Remind from:</label>
+    <input
+      type="number"
+      min="0"
+      max="23"
+      value={reminderStart}
+      onChange={handleReminderStartChange}
+      className="w-16 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+    />
+  </div>
+  <div className="flex items-center gap-2">
+    <label className="text-sm text-gray-700 whitespace-nowrap">to:</label>
+    <input
+      type="number"
+      min="0"
+      max="23"
+      value={reminderEnd}
+      onChange={handleReminderEndChange}
+      className="w-16 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+    />
+  </div>
+  <div className="flex items-center gap-2">
+    <label className="text-sm text-gray-700 whitespace-nowrap">every (min):</label>
+    <input
+      type="number"
+      min="0"
+      max="120"
+      step="5"
+      value={reminderInterval}
+      onChange={handleReminderIntervalChange}
+      className="w-20 bg-transparent text-slate-700 text-sm border border-slate-200 rounded-md px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
     />
   </div>
 </div>
