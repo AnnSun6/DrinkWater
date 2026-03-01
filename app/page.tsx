@@ -90,6 +90,9 @@ export default function Home() {
   const [todayTotalMl, setTodayTotalMl] = useState(0)
   const [cupSizeMl, setCupSizeMl] = useState(250)
   const [dailyGoalMl, setDailyGoalMl] = useState(2000)
+  const [reminderStart, setReminderStart] = useState(8)
+  const [reminderEnd, setReminderEnd] = useState(22)
+  const [reminderInterval, setReminderInterval] = useState(0)
   const [activeTab, setActiveTab] = useState<'reminder' | 'log' | 'profile'>('reminder')
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([])
   const [profileNickname, setProfileNickname] = useState<string>('')
@@ -264,12 +267,15 @@ export default function Home() {
     if (!userId) {
       setCupSizeMl(250)
       setDailyGoalMl(2000)
+      setReminderStart(8)
+      setReminderEnd(22)
+      setReminderInterval(0)
       return
     }
     
     const { data } = await supabase
       .from('user_settings')
-      .select('cup_size_ml, daily_goal_ml')
+      .select('cup_size_ml, daily_goal_ml, reminder_start_hour, reminder_end_hour, reminder_interval_min')
       .eq('user_id', userId)
       .single()
     
@@ -279,6 +285,9 @@ export default function Home() {
     if (data?.daily_goal_ml) {
       setDailyGoalMl(data.daily_goal_ml)
     }
+    if (data?.reminder_start_hour !== null && data?.reminder_start_hour !== undefined) setReminderStart(data.reminder_start_hour)
+    if (data?.reminder_end_hour !== null && data?.reminder_end_hour !== undefined) setReminderEnd(data.reminder_end_hour)
+    if (data?.reminder_interval_min !== null && data?.reminder_interval_min !== undefined) setReminderInterval(data.reminder_interval_min)
   }, [userId])
 
   const fetchDrinkLogs = useCallback(async () => {
@@ -1116,16 +1125,16 @@ export default function Home() {
                               {log.amount_ml} ml
                             </span>
                             <div className="flex items-center gap-2">
-  <span className="text-sm text-gray-500">
-    {formatTime(log.created_at)}
-  </span>
-  <button
-    onClick={() => handleDeleteDrinkLog(log.id)}
-    className="text-red-400 hover:text-red-600 text-xs"
-  >
-    delete
-  </button>
-</div>
+                              <span className="text-sm text-gray-500">
+                                {formatTime(log.created_at)}
+                              </span>
+                              <button
+                                onClick={() => handleDeleteDrinkLog(log.id)}
+                                className="text-red-400 hover:text-red-600 text-xs"
+                              >
+                                delete
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
