@@ -107,6 +107,7 @@ export default function Home() {
   const [hasSearched, setHasSearched] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
   const addFriendsRef = useRef<HTMLDivElement>(null)
+  const lastReminderRef = useRef<number>(Date.now())
 
   const fetchUserProfile = useCallback(async () => {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -461,6 +462,26 @@ export default function Home() {
       setReceiverNickname('')
     }
   }, [selectedReceiverId, fetchReceiverNickname])
+
+  useEffect(() => {
+    if (!reminderInterval || reminderInterval <= 0) return
+
+    const timer = setInterval(() => {
+      const hour = new Date().getHours()
+      if (hour < reminderStart || hour >= reminderEnd) return
+
+      if (Date.now() - lastReminderRef.current < reminderInterval * 60 * 1000) return
+
+      lastReminderRef.current = Date.now()
+      toast('Time to drink water!', { duration: 10000 })
+
+      if (Notification.permission === 'granted') {
+        new Notification('Drink Water Reminder', { body: 'Time to drink some water!', tag: 'drink-reminder' })
+      }
+    }, 60000)
+
+    return () => clearInterval(timer)
+  }, [reminderInterval, reminderStart, reminderEnd])
 
   function handleNewMessage(newMessage: Message) {
     if (!userId) return
