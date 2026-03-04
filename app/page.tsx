@@ -547,10 +547,18 @@ export default function Home() {
     }
   }
 
-  function showNotification(message: { sender_id: string; message: string }) {
+  async function showNotification(message: { sender_id: string; message: string }) {
     if (Notification.permission !== 'granted') return
 
-    const notification = new Notification('Notification from fanfan', {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('nickname')
+      .eq('user_id', message.sender_id)
+      .maybeSingle()
+
+    const senderName = profile?.nickname || 'Someone'
+
+    const notification = new Notification(`Reminder from ${senderName}`, {
       body: message.message,
       tag: 'water-reminder',
       icon: '/favicon.ico'
