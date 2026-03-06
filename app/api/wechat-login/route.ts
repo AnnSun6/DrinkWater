@@ -25,17 +25,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: wxData.errmsg }, { status: 401 })
   }
 
-  const { openid } = wxData
+  const openid = wxData.openid
+  if (!openid) {
+    return NextResponse.json({ error: '微信返回数据异常' }, { status: 502 })
+  }
   const email = `wechat_${openid}@internal.drinkwater.app`
   const password = derivePassword(openid)
 
   const { data: signIn } = await getSupabaseAdmin().auth.signInWithPassword({ email, password })
 
-  if (signIn.session) {
+  if (signIn.session && signIn.user) {
     return NextResponse.json({
       access_token: signIn.session.access_token,
       refresh_token: signIn.session.refresh_token,
-      user_id: signIn.user!.id,
+      user_id: signIn.user.id,
     })
   }
 
@@ -57,6 +60,14 @@ export async function POST(request: NextRequest) {
   await getSupabaseAdmin().from('users').insert({ id: newUserId, nickname })
   await getSupabaseAdmin().from('user_identities').insert({ user_id: newUserId, provider: 'wechat', provider_id: openid })
   await getSupabaseAdmin().from('user_profiles').insert({ user_id: newUserId, email, nickname })
+  await getSupabaseAdmin().from('user_settings').insert({
+    user_id: newUserId,
+    cup_size_ml: 250,
+    daily_goal_ml: 2000,
+    reminder_start_hour: 8,
+    reminder_end_hour: 22,
+    reminder_interval_min: 0,
+  })
 
   // 登录拿 token
   const { data: newSignIn } = await getSupabaseAdmin().auth.signInWithPassword({ email, password })
