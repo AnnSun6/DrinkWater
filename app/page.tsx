@@ -11,6 +11,7 @@ type Message = {
   message: string
   created_at: string
   is_read?: boolean
+  is_drank?: boolean
 }
 
 type DrinkLog = {
@@ -764,10 +765,23 @@ export default function Home() {
       .from('message')
       .update({ is_read: true })
       .eq('id', messageId)
-    
-    setMessages(prevMessages => 
-      prevMessages.map(msg => 
+
+    setMessages(prevMessages =>
+      prevMessages.map(msg =>
         msg.id === messageId ? { ...msg, is_read: true } : msg
+      )
+    )
+  }
+
+  async function handleMarkAsDrank(messageId: string) {
+    await supabase
+      .from('message')
+      .update({ is_drank: true })
+      .eq('id', messageId)
+
+    setMessages(prevMessages =>
+      prevMessages.map(msg =>
+        msg.id === messageId ? { ...msg, is_drank: true } : msg
       )
     )
   }
@@ -1152,15 +1166,24 @@ export default function Home() {
                           <span className="text-xs text-gray-400 whitespace-nowrap">
                             {formatTime(msg.created_at)}
                           </span>
-                          {!msg.is_read ? (
+                          {!msg.is_read && (
                             <button
                               onClick={() => handleMarkAsRead(msg.id)}
                               className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
                             >
                               got it
                             </button>
-                          ) : (
-                            <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
+                          )}
+                          {msg.is_read && !msg.is_drank && (
+                            <button
+                              onClick={() => handleMarkAsDrank(msg.id)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium py-1 px-2 rounded transition-colors whitespace-nowrap"
+                            >
+                              I drank!
+                            </button>
+                          )}
+                          {msg.is_drank && (
+                            <span className="text-xs text-blue-600 font-medium whitespace-nowrap">✓ drank</span>
                           )}
                         </div>
                       </div>
@@ -1194,7 +1217,9 @@ export default function Home() {
                           <span className="text-xs text-gray-400 whitespace-nowrap">
                             {formatTime(msg.created_at)}
                           </span>
-                          {msg.is_read ? (
+                          {msg.is_drank ? (
+                            <span className="text-xs text-blue-600 font-medium whitespace-nowrap">✓ drank!</span>
+                          ) : msg.is_read ? (
                             <span className="text-xs text-green-600 font-medium whitespace-nowrap">✓ read</span>
                           ) : (
                             <span className="text-xs text-gray-400 font-medium whitespace-nowrap">⏳ unread</span>
