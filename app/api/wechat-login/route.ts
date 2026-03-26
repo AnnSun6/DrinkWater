@@ -57,8 +57,6 @@ export async function POST(request: NextRequest) {
   const nickname = `微信用户_${openid.slice(-6)}`
 
   // 写入业务表
-  await getSupabaseAdmin().from('users').insert({ id: newUserId, nickname })
-  await getSupabaseAdmin().from('user_identities').insert({ user_id: newUserId, provider: 'wechat', provider_id: openid })
   await getSupabaseAdmin().from('user_profiles').insert({ user_id: newUserId, email, nickname })
   await getSupabaseAdmin().from('user_settings').insert({
     user_id: newUserId,
