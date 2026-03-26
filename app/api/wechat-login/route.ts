@@ -35,6 +35,11 @@ export async function POST(request: NextRequest) {
   const { data: signIn } = await getSupabaseAdmin().auth.signInWithPassword({ email, password })
 
   if (signIn.session && signIn.user) {
+    await getSupabaseAdmin()
+      .from('user_profiles')
+      .update({ wechat_openid: openid })
+      .eq('user_id', signIn.user.id)
+
     return NextResponse.json({
       access_token: signIn.session.access_token,
       refresh_token: signIn.session.refresh_token,
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
   const nickname = `微信用户_${openid.slice(-6)}`
 
   // 写入业务表
-  await getSupabaseAdmin().from('user_profiles').insert({ user_id: newUserId, email, nickname })
+  await getSupabaseAdmin().from('user_profiles').insert({ user_id: newUserId, email, nickname, wechat_openid: openid })
   await getSupabaseAdmin().from('user_settings').insert({
     user_id: newUserId,
     cup_size_ml: 250,
